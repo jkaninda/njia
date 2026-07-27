@@ -1,0 +1,28 @@
+name: Benchmarks
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+
+jobs:
+  grid:
+    name: Benchmark grid (informational)
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: internal/difftest
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-go@v7
+        with:
+          go-version: "1.23"
+      - name: Grid sanity
+        run: go test -run 'GridSanity' ./bench/...
+      - name: Benchmark grid
+        run: go test -run '^$' -bench . -benchmem ./bench/... | tee bench.txt
+      - uses: actions/upload-artifact@v7
+        with:
+          name: benchmarks
+          path: internal/difftest/bench.txt
