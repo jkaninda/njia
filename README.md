@@ -14,11 +14,6 @@ Whether you're building a REST API, reverse proxy, API gateway, or platform, Nji
 
 The main module has **zero** `require` entries and imports **only the Go standard library**. `gorilla/mux` is used exclusively in a separate test module (`internal/difftest`) to verify behavioral compatibility.
 
-[![Go Reference](https://pkg.go.dev/badge/github.com/jkaninda/njia.svg)](https://pkg.go.dev/github.com/jkaninda/njia)
-[![Go Report Card](https://goreportcard.com/badge/github.com/jkaninda/njia)](https://goreportcard.com/report/github.com/jkaninda/njia)
-[![Go](https://img.shields.io/badge/go-1.23%2B-00ADD8?logo=go&logoColor=white)](https://go.dev/dl/)
-[![License](https://img.shields.io/badge/license-Apache--2.0-blue.svg)](LICENSE)
-
 ## Installation
 
 ```bash
