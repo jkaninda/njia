@@ -1,0 +1,100 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+jobs:
+  build:
+    name: Build, vet, race tests
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-go@v7
+        with:
+          go-version: "1.23"
+      - run: go build ./...
+      - run: go vet ./...
+      - run: test -z "$(gofmt -s -l . | grep -v '^internal/difftest/vendored/')"
+      - run: go test -race ./...
+
+  zero-deps:
+    name: No dependencies in the main module
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-go@v7
+        with:
+          go-version: "1.23"
+      - name: go.mod declares no requirements
+        run: |
+          n=$(go mod edit -json | jq '(.Require // []) | length')
+          if [ "$n" != "0" ]; then
+            echo "the njia module must have zero require entries, found $n"
+            go mod edit -json | jq '.Require'
+            exit 1
+          fi
+      - name: no package depends on gorilla/mux
+        run: |
+          if go list -deps ./... | grep -q 'gorilla/mux'; then
+            echo "gorilla/mux leaked into the njia dependency graph"
+            go list -deps ./... | grep 'gorilla/mux'
+            exit 1
+          fi
+      - name: only standard library imports
+        run: |
+          # Everything reachable must be either njia itself or part of the Go
+          # distribution. Distribution packages are either unqualified stdlib
+          # paths or the toolchain's own vendored golang.org/x trees.
+          bad=$(go list -deps ./... \
+                | grep -v '^github.com/jkaninda/njia' \
+                | grep -v '^vendor/' \
+                | grep '\.' || true)
+          if [ -n "$bad" ]; then
+            echo "non-standard-library dependencies found:"
+            echo "$bad"
+            exit 1
+          fi
+
+  difftest:
+    name: Differential harness
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: internal/difftest
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-go@v7
+        with:
+          go-version: "1.23"
+      - run: go build ./...
+      - run: go vet ./...
+      - name: Ported gorilla suite
+        run: go test -race ./vendored/...
+      - name: Behavior parity, corpus replay and generated cases
+        run: go test -race -gen.cases=20000 -timeout 30m .
+      - name: Benchmark grid sanity
+        run: go test -run 'GridSanity' ./bench/...
+      - name: Extended generated sweep
+        run: |
+          for seed in 1 2 3 4 5; do
+            go test -run TestGenerated -gen.cases=40000 -gen.seed=$seed -timeout 30m .
+          done
+
+  bench:
+    name: Benchmark grid (informational)
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: internal/difftest
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-go@v7
+        with:
+          go-version: "1.23"
+      - run: go test -run '^$' -bench . -benchmem ./bench/... | tee bench.txt
+      - uses: actions/upload-artifact@v7
+        with:
+          name: benchmarks
+          path: internal/difftest/bench.txt

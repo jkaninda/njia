@@ -1,0 +1,391 @@
+{
+  "name": "goma",
+  "source": "github.com/jkaninda/goma-gateway @ b69f616",
+  "notes": "Extracted from goma's actual gorilla/mux wiring - internal/router.go AddRoute/configureHandlers, internal/goma.go addGlobalHandler/registerMetricsHandler/registerRouteHealthHandler, internal/reload.go registerReloadHandler and the OAuth callback registered in internal/middleware.go - combined with every route path/host found in the built-in default config (internal/config.go), examples/, docs/ and the Go tests. Every YAML route becomes mux.PathPrefix(route.path).Subrouter() carrying an inner Host(h).PathPrefix(\"\") catch-all handler per configured host (or a single bare PathPrefix(\"\") when no hosts are set); per-route 'methods:' are enforced inside the proxy handler rather than by mux, so they are deliberately not modelled as gorilla method matchers here - only the global observability/reload endpoints really use .Methods().",
+  "routes": [
+    {
+      "name": "gw_metrics",
+      "pathPrefix": "/metrics",
+      "sub": [
+        { "name": "gw_metrics_handler", "pathPrefix": "", "methods": ["GET"] }
+      ]
+    },
+    {
+      "name": "gw_route_health",
+      "pathPrefix": "/healthz/routes",
+      "sub": [
+        { "name": "gw_route_health_handler", "host": "monitoring.example.com", "pathPrefix": "", "methods": ["GET"] }
+      ]
+    },
+    { "name": "gw_readyz", "path": "/readyz", "methods": ["GET"] },
+    { "name": "gw_healthz", "path": "/healthz", "methods": ["GET"] },
+    { "name": "gw_reload_default", "path": "/gateway/reload", "methods": ["POST"] },
+    { "name": "gw_reload_custom", "path": "/-/reload", "host": "gateway.example.com", "methods": ["POST"] },
+
+    {
+      "name": "route_okapi_v2",
+      "pathPrefix": "/api/v2",
+      "sub": [
+        { "name": "route_okapi_v2_h_okapi", "host": "okapi.example.com", "pathPrefix": "" }
+      ]
+    },
+    {
+      "name": "route_okapi_v1",
+      "pathPrefix": "/api/v1",
+      "sub": [
+        { "name": "route_okapi_v1_any", "pathPrefix": "" },
+        { "name": "route_okapi_v1_oauth_callback", "path": "/callback/api/v1", "methods": ["GET"] }
+      ]
+    },
+    {
+      "name": "route_api_mtls",
+      "pathPrefix": "/v2",
+      "sub": [
+        { "name": "route_api_mtls_h_api", "host": "api.example.com", "pathPrefix": "" }
+      ]
+    },
+    {
+      "name": "route_default_api_v1",
+      "pathPrefix": "/v1",
+      "sub": [
+        { "name": "route_default_api_v1_h_api", "host": "api.example.com", "pathPrefix": "" }
+      ]
+    },
+    {
+      "name": "route_api",
+      "pathPrefix": "/api",
+      "sub": [
+        { "name": "route_api_any", "pathPrefix": "" }
+      ]
+    },
+    {
+      "name": "route_store_cart",
+      "pathPrefix": "/store/cart",
+      "sub": [
+        { "name": "route_store_cart_any", "pathPrefix": "" }
+      ]
+    },
+    {
+      "name": "route_cart",
+      "pathPrefix": "/cart",
+      "sub": [
+        { "name": "route_cart_any", "pathPrefix": "" }
+      ]
+    },
+    {
+      "name": "route_order",
+      "pathPrefix": "/order",
+      "sub": [
+        { "name": "route_order_any", "pathPrefix": "" },
+        { "name": "route_order_oauth_callback", "path": "/callback/order", "methods": ["GET"] }
+      ]
+    },
+    {
+      "name": "route_examples",
+      "pathPrefix": "/examples",
+      "sub": [
+        { "name": "route_examples_any", "pathPrefix": "" }
+      ]
+    },
+    {
+      "name": "route_example_named",
+      "pathPrefix": "/example",
+      "sub": [
+        { "name": "route_example_named_any", "pathPrefix": "" }
+      ]
+    },
+    {
+      "name": "route_extra",
+      "pathPrefix": "/extra",
+      "sub": [
+        { "name": "route_extra_any", "pathPrefix": "" }
+      ]
+    },
+    {
+      "name": "route_load_balancing",
+      "pathPrefix": "/load-balancing",
+      "sub": [
+        { "name": "route_load_balancing_any", "pathPrefix": "" }
+      ]
+    },
+    {
+      "name": "route_load_balancing2",
+      "pathPrefix": "/load-balancing2",
+      "sub": [
+        { "name": "route_load_balancing2_any", "pathPrefix": "" }
+      ]
+    },
+    {
+      "name": "route_weighted_extra",
+      "pathPrefix": "/weighted-extra",
+      "sub": [
+        { "name": "route_weighted_extra_any", "pathPrefix": "" }
+      ]
+    },
+    {
+      "name": "route_test",
+      "pathPrefix": "/test",
+      "sub": [
+        { "name": "route_test_any", "pathPrefix": "" }
+      ]
+    },
+    {
+      "name": "route_blog",
+      "pathPrefix": "/blog",
+      "sub": [
+        { "name": "route_blog_any", "pathPrefix": "" }
+      ]
+    },
+    {
+      "name": "route_gateway",
+      "pathPrefix": "/gateway",
+      "sub": [
+        { "name": "route_gateway_any", "pathPrefix": "" }
+      ]
+    },
+    {
+      "name": "route_admin_ui",
+      "pathPrefix": "/admin",
+      "sub": [
+        { "name": "route_admin_ui_any", "pathPrefix": "" }
+      ]
+    },
+    {
+      "name": "route_okapi_example_root",
+      "pathPrefix": "/",
+      "sub": [
+        { "name": "route_okapi_example_root_h", "host": "okapi.example.com", "pathPrefix": "" }
+      ]
+    },
+    {
+      "name": "route_wordpress",
+      "pathPrefix": "/",
+      "sub": [
+        { "name": "route_wordpress_h", "host": "wordpress.example.com", "pathPrefix": "" }
+      ]
+    },
+    {
+      "name": "route_grafana",
+      "pathPrefix": "/",
+      "sub": [
+        { "name": "route_grafana_h", "host": "grafana.example.com", "pathPrefix": "" }
+      ]
+    },
+    {
+      "name": "route_api_example_root",
+      "pathPrefix": "/",
+      "sub": [
+        { "name": "route_api_example_root_h", "host": "api.example.com", "pathPrefix": "" }
+      ]
+    },
+    {
+      "name": "route_api_canary",
+      "pathPrefix": "/",
+      "sub": [
+        { "name": "route_api_canary_h", "host": "api.v1.example.com", "pathPrefix": "" }
+      ]
+    },
+    {
+      "name": "route_docker_web",
+      "pathPrefix": "/",
+      "sub": [
+        { "name": "route_docker_web_h_apex", "host": "example.com", "pathPrefix": "" },
+        { "name": "route_docker_web_h_www", "host": "www.example.com", "pathPrefix": "" }
+      ]
+    },
+    {
+      "name": "route_my_app_wildcard",
+      "pathPrefix": "/",
+      "sub": [
+        { "name": "route_my_app_wildcard_h_star", "host": "*.example.com", "pathPrefix": "" },
+        { "name": "route_my_app_wildcard_h_apex", "host": "example.com", "pathPrefix": "" }
+      ]
+    },
+    {
+      "name": "route_example_localhost",
+      "pathPrefix": "/",
+      "sub": [
+        { "name": "route_example_localhost_h_com", "host": "example.com", "pathPrefix": "" },
+        { "name": "route_example_localhost_h_localhost", "host": "example.localhost", "pathPrefix": "" }
+      ]
+    },
+    {
+      "name": "route_app_example",
+      "pathPrefix": "/",
+      "sub": [
+        { "name": "route_app_example_h", "host": "app.example.com", "pathPrefix": "" }
+      ]
+    },
+    {
+      "name": "route_app_internal",
+      "pathPrefix": "/",
+      "sub": [
+        { "name": "route_app_internal_h", "host": "app.internal", "pathPrefix": "" }
+      ]
+    },
+    {
+      "name": "route_marketing",
+      "pathPrefix": "/",
+      "sub": [
+        { "name": "route_marketing_h", "host": "marketing.example.com", "pathPrefix": "" }
+      ]
+    },
+    {
+      "name": "route_staging_app",
+      "pathPrefix": "/",
+      "sub": [
+        { "name": "route_staging_app_h", "host": "staging.example.com", "pathPrefix": "" }
+      ]
+    },
+    {
+      "name": "route_internal_admin",
+      "pathPrefix": "/",
+      "sub": [
+        { "name": "route_internal_admin_h", "host": "admin.internal", "pathPrefix": "" }
+      ]
+    },
+    {
+      "name": "route_goma_admin",
+      "pathPrefix": "/",
+      "sub": [
+        { "name": "route_goma_admin_h", "host": "goma-admin.example.com", "pathPrefix": "" }
+      ]
+    },
+    {
+      "name": "route_default_example_catchall",
+      "pathPrefix": "/",
+      "sub": [
+        { "name": "route_default_example_catchall_any", "pathPrefix": "" }
+      ]
+    }
+  ],
+  "requests": [
+    { "method": "GET", "target": "/metrics" },
+    { "method": "GET", "target": "/metrics/" },
+    { "method": "GET", "target": "/metrics/extra" },
+    { "method": "POST", "target": "/metrics" },
+    { "method": "GET", "target": "/metricsfoo" },
+    { "method": "GET", "target": "/healthz/routes", "host": "monitoring.example.com" },
+    { "method": "GET", "target": "/healthz/routes" },
+    { "method": "POST", "target": "/healthz/routes", "host": "monitoring.example.com" },
+    { "method": "GET", "target": "/healthz" },
+    { "method": "GET", "target": "/healthz/" },
+    { "method": "POST", "target": "/healthz" },
+    { "method": "GET", "target": "/readyz" },
+    { "method": "HEAD", "target": "/readyz" },
+    { "method": "POST", "target": "/gateway/reload", "header": { "Authorization": ["Bearer s3cr3t"] } },
+    { "method": "GET", "target": "/gateway/reload" },
+    { "method": "POST", "target": "/-/reload", "host": "gateway.example.com" },
+    { "method": "POST", "target": "/-/reload", "host": "other.example.com" },
+    { "method": "POST", "target": "/-/reload" },
+
+    { "method": "GET", "target": "/api/v2", "host": "okapi.example.com" },
+    { "method": "GET", "target": "/api/v2/", "host": "okapi.example.com" },
+    { "method": "GET", "target": "/api/v2/books", "host": "okapi.example.com" },
+    { "method": "POST", "target": "/api/v2/books", "host": "okapi.example.com" },
+    { "method": "GET", "target": "/api/v2/books", "host": "api.example.com" },
+    { "method": "GET", "target": "/api/v2/books" },
+    { "method": "GET", "target": "/api/v20/books", "host": "okapi.example.com" },
+
+    { "method": "GET", "target": "/api/v1" },
+    { "method": "GET", "target": "/api/v1/" },
+    { "method": "GET", "target": "/api/v1/users/42" },
+    { "method": "DELETE", "target": "/api/v1/users/42" },
+    { "method": "GET", "target": "/api/v1/callback/api/v1" },
+    { "method": "POST", "target": "/api/v1/callback/api/v1" },
+    { "method": "GET", "target": "/api/v1/users?page=2&per_page=50" },
+
+    { "method": "GET", "target": "/v2", "host": "api.example.com" },
+    { "method": "GET", "target": "/v2/orders/9", "host": "api.example.com" },
+    { "method": "GET", "target": "/v2/orders/9", "host": "okapi.example.com" },
+    { "method": "GET", "target": "/v1", "host": "api.example.com" },
+    { "method": "GET", "target": "/v1/products", "host": "api.example.com" },
+    { "method": "GET", "target": "/v1/products", "host": "api.example.com:8443" },
+    { "method": "GET", "target": "/v1/products" },
+    { "method": "GET", "target": "/v11/products", "host": "api.example.com" },
+
+    { "method": "GET", "target": "/api" },
+    { "method": "GET", "target": "/api/" },
+    { "method": "GET", "target": "/api/anything/at/all" },
+    { "method": "PUT", "target": "/api/anything" },
+
+    { "method": "GET", "target": "/store/cart" },
+    { "method": "GET", "target": "/store/cart/items/3" },
+    { "method": "POST", "target": "/store/cart/items" },
+    { "method": "GET", "target": "/store" },
+    { "method": "GET", "target": "/cart" },
+    { "method": "GET", "target": "/cart/" },
+    { "method": "GET", "target": "/cart/items" },
+    { "method": "DELETE", "target": "/cart/items/1" },
+    { "method": "GET", "target": "/carts" },
+
+    { "method": "GET", "target": "/order" },
+    { "method": "POST", "target": "/order/checkout" },
+    { "method": "GET", "target": "/order/callback/order?code=abc&state=xyz" },
+    { "method": "POST", "target": "/order/callback/order" },
+
+    { "method": "GET", "target": "/examples" },
+    { "method": "GET", "target": "/examples/one" },
+    { "method": "GET", "target": "/example" },
+    { "method": "GET", "target": "/example/two" },
+    { "method": "GET", "target": "/extra" },
+    { "method": "GET", "target": "/extra/deep/path" },
+    { "method": "GET", "target": "/load-balancing" },
+    { "method": "GET", "target": "/load-balancing/health" },
+    { "method": "GET", "target": "/load-balancing2" },
+    { "method": "GET", "target": "/load-balancing2/x" },
+    { "method": "GET", "target": "/weighted-extra" },
+    { "method": "GET", "target": "/weighted-extra/y" },
+    { "method": "GET", "target": "/test" },
+    { "method": "POST", "target": "/test/echo" },
+    { "method": "GET", "target": "/blog/hello" },
+    { "method": "GET", "target": "/blog/hello-world/comments" },
+    { "method": "GET", "target": "/gateway" },
+    { "method": "GET", "target": "/gateway/status" },
+    { "method": "GET", "target": "/admin" },
+    { "method": "GET", "target": "/admin/" },
+    { "method": "GET", "target": "/admin/users/1" },
+    { "method": "GET", "target": "/administrator" },
+
+    { "method": "GET", "target": "/", "host": "okapi.example.com" },
+    { "method": "GET", "target": "/anything", "host": "okapi.example.com" },
+    { "method": "GET", "target": "/", "host": "wordpress.example.com" },
+    { "method": "GET", "target": "/wp-admin/index.php", "host": "wordpress.example.com" },
+    { "method": "POST", "target": "/wp-login.php", "host": "wordpress.example.com" },
+    { "method": "GET", "target": "/", "host": "grafana.example.com" },
+    { "method": "GET", "target": "/d/abc123/dashboard?orgId=1", "host": "grafana.example.com" },
+    { "method": "GET", "target": "/", "host": "api.example.com" },
+    { "method": "GET", "target": "/users", "host": "api.example.com" },
+    { "method": "GET", "target": "/", "host": "api.v1.example.com" },
+    { "method": "GET", "target": "/checkout", "host": "api.v1.example.com", "header": { "X-Canary-User": ["true"] } },
+    { "method": "GET", "target": "/checkout?version=beta", "host": "api.v1.example.com" },
+    { "method": "GET", "target": "/", "host": "example.com" },
+    { "method": "GET", "target": "/index.html", "host": "example.com" },
+    { "method": "GET", "target": "/", "host": "www.example.com" },
+    { "method": "GET", "target": "/about", "host": "www.example.com" },
+    { "method": "GET", "target": "/", "host": "*.example.com" },
+    { "method": "GET", "target": "/", "host": "shop.example.com" },
+    { "method": "GET", "target": "/", "host": "example.localhost" },
+    { "method": "GET", "target": "/", "host": "app.example.com" },
+    { "method": "GET", "target": "/", "host": "app.internal" },
+    { "method": "GET", "target": "/", "host": "marketing.example.com" },
+    { "method": "GET", "target": "/", "host": "staging.example.com" },
+    { "method": "GET", "target": "/", "host": "admin.internal" },
+    { "method": "GET", "target": "/", "host": "goma-admin.example.com" },
+    { "method": "GET", "target": "/", "host": "GOMA-ADMIN.EXAMPLE.COM" },
+    { "method": "GET", "target": "/", "host": "unknown.tld" },
+    { "method": "GET", "target": "/" },
+    { "method": "POST", "target": "/" },
+
+    { "method": "GET", "target": "/some/unmatched/deep/path" },
+    { "method": "GET", "target": "//double-slash" },
+    { "method": "GET", "target": "/caf%C3%A9/menu", "host": "www.example.com" },
+    { "method": "GET", "target": "/produits/café", "host": "marketing.example.com" },
+    { "method": "GET", "target": "/搜索?q=%E4%B8%AD%E6%96%87", "host": "example.com" },
+    { "method": "GET", "target": "/store%2Fcart" },
+    { "method": "GET", "target": "/v1/products", "host": "api.example.com", "tls": true },
+    { "method": "GET", "target": "/", "host": "example.com", "tls": true },
+    { "method": "OPTIONS", "target": "/api/v1/users", "header": { "Origin": ["https://example.com"], "Access-Control-Request-Method": ["POST"] } },
+    { "method": "TRACE", "target": "/healthz" }
+  ]
+}

@@ -1,0 +1,1428 @@
+{
+  "name": "okapi",
+  "source": "github.com/jkaninda/okapi @ cfe6db5",
+  "notes": "Extracted by reading okapi's own routing wrappers (Okapi.Get/Post/Put/Patch/Delete/Head/Options/Handle/HandleStd/HandleHTTP in okapi.go, Group.add/Group.Group in group.go, Static/StaticFile/StaticFS/Web/SPA in static.go, the always-registered doc UI routes in doc.go) plus every concrete path registered in the library, its tests, examples/ and docs/. okapi flattens Groups into absolute paths on one flat mux.Router (it never calls Subrouter), and normalizeRoutePath strips param type hints, so ':id' and '{id:int}' both become '{id}' and '/*', '/*any', '/*path' all become '/{any:.*}'; hence no host, query, header or scheme matchers and no regex constraints other than the wildcard appear here.",
+  "routes": [
+    {
+      "name": "root_get",
+      "path": "/",
+      "methods": [
+        "GET"
+      ]
+    },
+    {
+      "name": "hello_get",
+      "path": "/hello",
+      "methods": [
+        "GET"
+      ]
+    },
+    {
+      "name": "hello_post",
+      "path": "/hello",
+      "methods": [
+        "POST"
+      ]
+    },
+    {
+      "name": "hello_put",
+      "path": "/hello",
+      "methods": [
+        "PUT"
+      ]
+    },
+    {
+      "name": "hello_patch",
+      "path": "/hello",
+      "methods": [
+        "PATCH"
+      ]
+    },
+    {
+      "name": "hello_delete",
+      "path": "/hello",
+      "methods": [
+        "DELETE"
+      ]
+    },
+    {
+      "name": "hello_options",
+      "path": "/hello",
+      "methods": [
+        "OPTIONS"
+      ]
+    },
+    {
+      "name": "hello_head",
+      "path": "/hello",
+      "methods": [
+        "HEAD"
+      ]
+    },
+    {
+      "name": "standard_get",
+      "path": "/standard",
+      "methods": [
+        "GET"
+      ]
+    },
+    {
+      "name": "standard_http_get",
+      "path": "/standard-http",
+      "methods": [
+        "GET"
+      ]
+    },
+    {
+      "name": "favicon_file",
+      "path": "/favicon.ico",
+      "methods": [
+        "GET"
+      ]
+    },
+    {
+      "name": "events_get",
+      "path": "/events",
+      "methods": [
+        "GET"
+      ]
+    },
+    {
+      "name": "events_with_id_get",
+      "path": "/events_with_id",
+      "methods": [
+        "GET"
+      ]
+    },
+    {
+      "name": "upload_post",
+      "path": "/upload",
+      "methods": [
+        "POST"
+      ]
+    },
+    {
+      "name": "greeting_show",
+      "path": "/greeting/{name}",
+      "methods": [
+        "GET"
+      ]
+    },
+    {
+      "name": "login_get",
+      "path": "/login",
+      "methods": [
+        "GET"
+      ]
+    },
+    {
+      "name": "notifications_get",
+      "path": "/notifications",
+      "methods": [
+        "GET"
+      ]
+    },
+    {
+      "name": "secure_me_get",
+      "path": "/secure/me",
+      "methods": [
+        "GET"
+      ]
+    },
+    {
+      "name": "admin_get",
+      "path": "/admin",
+      "methods": [
+        "GET"
+      ]
+    },
+    {
+      "name": "admin_users_get",
+      "path": "/admin/users",
+      "methods": [
+        "GET"
+      ]
+    },
+    {
+      "name": "admin_protected_get",
+      "path": "/admin/protected",
+      "methods": [
+        "GET"
+      ]
+    },
+    {
+      "name": "books_list",
+      "path": "/books",
+      "methods": [
+        "GET"
+      ]
+    },
+    {
+      "name": "books_create",
+      "path": "/books",
+      "methods": [
+        "POST"
+      ]
+    },
+    {
+      "name": "books_update",
+      "path": "/books",
+      "methods": [
+        "PUT"
+      ]
+    },
+    {
+      "name": "books_show",
+      "path": "/books/{id}",
+      "methods": [
+        "GET"
+      ]
+    },
+    {
+      "name": "books_update_by_id",
+      "path": "/books/{id}",
+      "methods": [
+        "PUT"
+      ]
+    },
+    {
+      "name": "books_patch",
+      "path": "/books/{id}",
+      "methods": [
+        "PATCH"
+      ]
+    },
+    {
+      "name": "books_delete",
+      "path": "/books/{id}",
+      "methods": [
+        "DELETE"
+      ]
+    },
+    {
+      "name": "cors_options_books",
+      "path": "/books",
+      "methods": [
+        "OPTIONS"
+      ]
+    },
+    {
+      "name": "json_get",
+      "path": "/json",
+      "methods": [
+        "GET"
+      ]
+    },
+    {
+      "name": "json_post",
+      "path": "/json",
+      "methods": [
+        "POST"
+      ]
+    },
+    {
+      "name": "xml_post",
+      "path": "/xml",
+      "methods": [
+        "POST"
+      ]
+    },
+    {
+      "name": "yaml_post",
+      "path": "/yaml",
+      "methods": [
+        "POST"
+      ]
+    },
+    {
+      "name": "form_post",
+      "path": "/form",
+      "methods": [
+        "POST"
+      ]
+    },
+    {
+      "name": "multipart_post",
+      "path": "/multipart",
+      "methods": [
+        "POST"
+      ]
+    },
+    {
+      "name": "query_get",
+      "path": "/query",
+      "methods": [
+        "GET"
+      ]
+    },
+    {
+      "name": "created_get",
+      "path": "/created",
+      "methods": [
+        "GET"
+      ]
+    },
+    {
+      "name": "text_get",
+      "path": "/text",
+      "methods": [
+        "GET"
+      ]
+    },
+    {
+      "name": "data_get",
+      "path": "/data",
+      "methods": [
+        "GET"
+      ]
+    },
+    {
+      "name": "no_content_get",
+      "path": "/no-content",
+      "methods": [
+        "GET"
+      ]
+    },
+    {
+      "name": "echo_post",
+      "path": "/echo",
+      "methods": [
+        "POST"
+      ]
+    },
+    {
+      "name": "p_get",
+      "path": "/p",
+      "methods": [
+        "GET"
+      ]
+    },
+    {
+      "name": "protected_get",
+      "path": "/protected",
+      "methods": [
+        "GET"
+      ]
+    },
+    {
+      "name": "things_create",
+      "path": "/things",
+      "methods": [
+        "POST"
+      ]
+    },
+    {
+      "name": "users_list",
+      "path": "/users",
+      "methods": [
+        "GET"
+      ]
+    },
+    {
+      "name": "users_show",
+      "path": "/users/{id}",
+      "methods": [
+        "GET"
+      ]
+    },
+    {
+      "name": "api_root_get",
+      "path": "/api",
+      "methods": [
+        "GET"
+      ]
+    },
+    {
+      "name": "api_hello_get",
+      "path": "/api/hello",
+      "methods": [
+        "GET"
+      ]
+    },
+    {
+      "name": "api_hello_post",
+      "path": "/api/hello",
+      "methods": [
+        "POST"
+      ]
+    },
+    {
+      "name": "api_hello_put",
+      "path": "/api/hello",
+      "methods": [
+        "PUT"
+      ]
+    },
+    {
+      "name": "api_hello_patch",
+      "path": "/api/hello",
+      "methods": [
+        "PATCH"
+      ]
+    },
+    {
+      "name": "api_hello_delete",
+      "path": "/api/hello",
+      "methods": [
+        "DELETE"
+      ]
+    },
+    {
+      "name": "api_hello_options",
+      "path": "/api/hello",
+      "methods": [
+        "OPTIONS"
+      ]
+    },
+    {
+      "name": "api_hello_head",
+      "path": "/api/hello",
+      "methods": [
+        "HEAD"
+      ]
+    },
+    {
+      "name": "api_group_get",
+      "path": "/api/group",
+      "methods": [
+        "GET"
+      ]
+    },
+    {
+      "name": "api_standard_get",
+      "path": "/api/standard",
+      "methods": [
+        "GET"
+      ]
+    },
+    {
+      "name": "api_standard_http_get",
+      "path": "/api/standard-http",
+      "methods": [
+        "GET"
+      ]
+    },
+    {
+      "name": "api_ping_get",
+      "path": "/api/ping",
+      "methods": [
+        "GET"
+      ]
+    },
+    {
+      "name": "api_books_list",
+      "path": "/api/books",
+      "methods": [
+        "GET"
+      ]
+    },
+    {
+      "name": "api_books_show",
+      "path": "/api/books/{id}",
+      "methods": [
+        "GET"
+      ]
+    },
+    {
+      "name": "api_admin_books_create",
+      "path": "/api/admin/books",
+      "methods": [
+        "POST"
+      ]
+    },
+    {
+      "name": "api_admin_books_update",
+      "path": "/api/admin/books/{id}",
+      "methods": [
+        "PUT"
+      ]
+    },
+    {
+      "name": "api_v1_books_list",
+      "path": "/api/v1/books",
+      "methods": [
+        "GET"
+      ]
+    },
+    {
+      "name": "api_v1_books_create",
+      "path": "/api/v1/books",
+      "methods": [
+        "POST"
+      ]
+    },
+    {
+      "name": "api_v1_books_update",
+      "path": "/api/v1/books",
+      "methods": [
+        "PUT"
+      ]
+    },
+    {
+      "name": "cors_options_api_v1_books",
+      "path": "/api/v1/books",
+      "methods": [
+        "OPTIONS"
+      ]
+    },
+    {
+      "name": "api_v1_books_show",
+      "path": "/api/v1/books/{id}",
+      "methods": [
+        "GET"
+      ]
+    },
+    {
+      "name": "api_v1_books_delete",
+      "path": "/api/v1/books/{id}",
+      "methods": [
+        "DELETE"
+      ]
+    },
+    {
+      "name": "api_v1_book_comments",
+      "path": "/api/v1/books/{id}/comments",
+      "methods": [
+        "GET"
+      ]
+    },
+    {
+      "name": "api_v1_health",
+      "path": "/api/v1/health",
+      "methods": [
+        "GET"
+      ]
+    },
+    {
+      "name": "api_v1_version",
+      "path": "/api/v1/version",
+      "methods": [
+        "GET"
+      ]
+    },
+    {
+      "name": "api_v1_users_list",
+      "path": "/api/v1/users",
+      "methods": [
+        "GET"
+      ]
+    },
+    {
+      "name": "api_v1_users_create",
+      "path": "/api/v1/users",
+      "methods": [
+        "POST"
+      ]
+    },
+    {
+      "name": "api_v1_users_show",
+      "path": "/api/v1/users/{id}",
+      "methods": [
+        "GET"
+      ]
+    },
+    {
+      "name": "api_v1_users_update",
+      "path": "/api/v1/users/{id}",
+      "methods": [
+        "PUT"
+      ]
+    },
+    {
+      "name": "api_v1_protected_post",
+      "path": "/api/v1/protected",
+      "methods": [
+        "POST"
+      ]
+    },
+    {
+      "name": "api_v1_auth_login",
+      "path": "/api/v1/auth/login",
+      "methods": [
+        "POST"
+      ]
+    },
+    {
+      "name": "api_v1_security_whoami",
+      "path": "/api/v1/security/whoami",
+      "methods": [
+        "POST"
+      ]
+    },
+    {
+      "name": "api_v1_admin_books_list",
+      "path": "/api/v1/admin/books",
+      "methods": [
+        "GET"
+      ]
+    },
+    {
+      "name": "api_v1_admin_books_create",
+      "path": "/api/v1/admin/books",
+      "methods": [
+        "POST"
+      ]
+    },
+    {
+      "name": "api_v1_admin_books_update",
+      "path": "/api/v1/admin/books/{id}",
+      "methods": [
+        "PUT"
+      ]
+    },
+    {
+      "name": "api_v1_admin_books_delete",
+      "path": "/api/v1/admin/books/{id}",
+      "methods": [
+        "DELETE"
+      ]
+    },
+    {
+      "name": "api_v1_any_wildcard",
+      "path": "/api/v1/any/{any:.*}",
+      "methods": [
+        "GET"
+      ]
+    },
+    {
+      "name": "api_v1_all_wildcard",
+      "path": "/api/v1/all/{any:.*}",
+      "methods": [
+        "GET"
+      ]
+    },
+    {
+      "name": "api_v2_books_list",
+      "path": "/api/v2/books",
+      "methods": [
+        "GET"
+      ]
+    },
+    {
+      "name": "api_v2_books_create",
+      "path": "/api/v2/books",
+      "methods": [
+        "POST"
+      ]
+    },
+    {
+      "name": "api_v2_books_update",
+      "path": "/api/v2/books",
+      "methods": [
+        "PUT"
+      ]
+    },
+    {
+      "name": "api_v2_books_show",
+      "path": "/api/v2/books/{id}",
+      "methods": [
+        "GET"
+      ]
+    },
+    {
+      "name": "api_v2_books_delete",
+      "path": "/api/v2/books/{id}",
+      "methods": [
+        "DELETE"
+      ]
+    },
+    {
+      "name": "api_v2_products_create",
+      "path": "/api/v2/products",
+      "methods": [
+        "POST"
+      ]
+    },
+    {
+      "name": "api_v2_users_list",
+      "path": "/api/v2/users",
+      "methods": [
+        "GET"
+      ]
+    },
+    {
+      "name": "api_v2_users_show",
+      "path": "/api/v2/users/{id}",
+      "methods": [
+        "GET"
+      ]
+    },
+    {
+      "name": "api_v2_login",
+      "path": "/api/v2/login",
+      "methods": [
+        "POST"
+      ]
+    },
+    {
+      "name": "api_v2_admin_books_create",
+      "path": "/api/v2/admin/books",
+      "methods": [
+        "POST"
+      ]
+    },
+    {
+      "name": "api_v2_admin_books_update",
+      "path": "/api/v2/admin/books/{id}",
+      "methods": [
+        "PUT"
+      ]
+    },
+    {
+      "name": "api_v2_admin_books_delete",
+      "path": "/api/v2/admin/books/{id}",
+      "methods": [
+        "DELETE"
+      ]
+    },
+    {
+      "name": "api_v2_admin_whoami",
+      "path": "/api/v2/admin/whoami",
+      "methods": [
+        "GET"
+      ]
+    },
+    {
+      "name": "api_v3_books_create",
+      "path": "/api/v3/books",
+      "methods": [
+        "POST"
+      ]
+    },
+    {
+      "name": "api_v3_books_update",
+      "path": "/api/v3/books",
+      "methods": [
+        "PUT"
+      ]
+    },
+    {
+      "name": "api_v3_books_show",
+      "path": "/api/v3/books/{id}",
+      "methods": [
+        "GET"
+      ]
+    },
+    {
+      "name": "api_version_users_show",
+      "path": "/api/{version}/users/{id}",
+      "methods": [
+        "GET"
+      ]
+    },
+    {
+      "name": "v1_a_get",
+      "path": "/v1/a",
+      "methods": [
+        "GET"
+      ]
+    },
+    {
+      "name": "v1_b_get",
+      "path": "/v1/b",
+      "methods": [
+        "GET"
+      ]
+    },
+    {
+      "name": "v1_c_post",
+      "path": "/v1/c",
+      "methods": [
+        "POST"
+      ]
+    },
+    {
+      "name": "x_y_get",
+      "path": "/x/y",
+      "methods": [
+        "GET"
+      ]
+    },
+    {
+      "name": "z_a_get",
+      "path": "/z/a",
+      "methods": [
+        "GET"
+      ]
+    },
+    {
+      "name": "docs_index",
+      "path": "/docs",
+      "methods": [
+        "GET"
+      ]
+    },
+    {
+      "name": "docs_favicon",
+      "path": "/docs/favicon.png",
+      "methods": [
+        "GET"
+      ]
+    },
+    {
+      "name": "openapi_json",
+      "path": "/openapi.json",
+      "methods": [
+        "GET"
+      ]
+    },
+    {
+      "name": "openapi_yaml",
+      "path": "/openapi.yaml",
+      "methods": [
+        "GET"
+      ]
+    },
+    {
+      "name": "openapi_30_json",
+      "path": "/openapi-3.0.json",
+      "methods": [
+        "GET"
+      ]
+    },
+    {
+      "name": "openapi_30_yaml",
+      "path": "/openapi-3.0.yaml",
+      "methods": [
+        "GET"
+      ]
+    },
+    {
+      "name": "docs_swagger",
+      "path": "/swagger",
+      "methods": [
+        "GET"
+      ]
+    },
+    {
+      "name": "docs_redoc",
+      "path": "/redoc",
+      "methods": [
+        "GET"
+      ]
+    },
+    {
+      "name": "docs_scalar",
+      "path": "/scalar",
+      "methods": [
+        "GET"
+      ]
+    },
+    {
+      "name": "static_prefix",
+      "pathPrefix": "/static",
+      "methods": [
+        "GET"
+      ]
+    },
+    {
+      "name": "assets_prefix",
+      "pathPrefix": "/assets",
+      "methods": [
+        "GET"
+      ]
+    },
+    {
+      "name": "web_spa_root_prefix",
+      "pathPrefix": "/",
+      "methods": [
+        "GET"
+      ]
+    }
+  ],
+  "requests": [
+    {
+      "method": "GET",
+      "target": "/"
+    },
+    {
+      "method": "GET",
+      "target": "/hello"
+    },
+    {
+      "method": "POST",
+      "target": "/hello"
+    },
+    {
+      "method": "OPTIONS",
+      "target": "/hello"
+    },
+    {
+      "method": "GET",
+      "target": "/hello/"
+    },
+    {
+      "method": "GET",
+      "target": "/hello/world"
+    },
+    {
+      "method": "GET",
+      "target": "/standard"
+    },
+    {
+      "method": "GET",
+      "target": "/standard-http"
+    },
+    {
+      "method": "GET",
+      "target": "/standard-http/css/app.css"
+    },
+    {
+      "method": "GET",
+      "target": "/favicon.ico"
+    },
+    {
+      "method": "POST",
+      "target": "/favicon.ico"
+    },
+    {
+      "method": "GET",
+      "target": "/events"
+    },
+    {
+      "method": "GET",
+      "target": "/events_with_id"
+    },
+    {
+      "method": "GET",
+      "target": "/events_with_id/"
+    },
+    {
+      "method": "POST",
+      "target": "/upload"
+    },
+    {
+      "method": "GET",
+      "target": "/upload"
+    },
+    {
+      "method": "GET",
+      "target": "/greeting/jonas"
+    },
+    {
+      "method": "GET",
+      "target": "/greeting/Jonas%20Kaninda"
+    },
+    {
+      "method": "GET",
+      "target": "/greeting/%C3%A9milie"
+    },
+    {
+      "method": "GET",
+      "target": "/greeting/世界"
+    },
+    {
+      "method": "GET",
+      "target": "/greeting/"
+    },
+    {
+      "method": "GET",
+      "target": "/greeting/a/b"
+    },
+    {
+      "method": "GET",
+      "target": "/secure/me"
+    },
+    {
+      "method": "GET",
+      "target": "/admin"
+    },
+    {
+      "method": "GET",
+      "target": "/admin/users"
+    },
+    {
+      "method": "GET",
+      "target": "/admin/protected"
+    },
+    {
+      "method": "POST",
+      "target": "/admin/protected"
+    },
+    {
+      "method": "GET",
+      "target": "/books"
+    },
+    {
+      "method": "POST",
+      "target": "/books"
+    },
+    {
+      "method": "PUT",
+      "target": "/books"
+    },
+    {
+      "method": "OPTIONS",
+      "target": "/books"
+    },
+    {
+      "method": "HEAD",
+      "target": "/books"
+    },
+    {
+      "method": "GET",
+      "target": "/books/42"
+    },
+    {
+      "method": "PUT",
+      "target": "/books/42"
+    },
+    {
+      "method": "PATCH",
+      "target": "/books/42"
+    },
+    {
+      "method": "DELETE",
+      "target": "/books/42"
+    },
+    {
+      "method": "POST",
+      "target": "/books/42"
+    },
+    {
+      "method": "GET",
+      "target": "/books/42/"
+    },
+    {
+      "method": "GET",
+      "target": "/books/not-a-number"
+    },
+    {
+      "method": "GET",
+      "target": "/books/42/comments"
+    },
+    {
+      "method": "GET",
+      "target": "/books?limit=10&offset=20"
+    },
+    {
+      "method": "GET",
+      "target": "/json"
+    },
+    {
+      "method": "POST",
+      "target": "/json"
+    },
+    {
+      "method": "POST",
+      "target": "/multipart"
+    },
+    {
+      "method": "GET",
+      "target": "/query?tags=go&tags=web"
+    },
+    {
+      "method": "GET",
+      "target": "/no-content"
+    },
+    {
+      "method": "POST",
+      "target": "/echo"
+    },
+    {
+      "method": "GET",
+      "target": "/p"
+    },
+    {
+      "method": "GET",
+      "target": "/protected",
+      "header": {
+        "Authorization": [
+          "Bearer abc.def.ghi"
+        ]
+      }
+    },
+    {
+      "method": "POST",
+      "target": "/things"
+    },
+    {
+      "method": "GET",
+      "target": "/users"
+    },
+    {
+      "method": "GET",
+      "target": "/users/1"
+    },
+    {
+      "method": "GET",
+      "target": "/users/9999"
+    },
+    {
+      "method": "DELETE",
+      "target": "/users/1"
+    },
+    {
+      "method": "GET",
+      "target": "/api"
+    },
+    {
+      "method": "GET",
+      "target": "/api/"
+    },
+    {
+      "method": "GET",
+      "target": "/api/hello"
+    },
+    {
+      "method": "POST",
+      "target": "/api/hello"
+    },
+    {
+      "method": "OPTIONS",
+      "target": "/api/hello"
+    },
+    {
+      "method": "GET",
+      "target": "/api/group"
+    },
+    {
+      "method": "GET",
+      "target": "/api/ping"
+    },
+    {
+      "method": "GET",
+      "target": "/api/books"
+    },
+    {
+      "method": "GET",
+      "target": "/api/books/7"
+    },
+    {
+      "method": "POST",
+      "target": "/api/admin/books"
+    },
+    {
+      "method": "PUT",
+      "target": "/api/admin/books/7"
+    },
+    {
+      "method": "DELETE",
+      "target": "/api/admin/books/7"
+    },
+    {
+      "method": "GET",
+      "target": "/api/v1/books"
+    },
+    {
+      "method": "POST",
+      "target": "/api/v1/books"
+    },
+    {
+      "method": "PUT",
+      "target": "/api/v1/books"
+    },
+    {
+      "method": "OPTIONS",
+      "target": "/api/v1/books"
+    },
+    {
+      "method": "PATCH",
+      "target": "/api/v1/books"
+    },
+    {
+      "method": "GET",
+      "target": "/api/v1/books/123"
+    },
+    {
+      "method": "DELETE",
+      "target": "/api/v1/books/123"
+    },
+    {
+      "method": "GET",
+      "target": "/api/v1/books/123/comments"
+    },
+    {
+      "method": "GET",
+      "target": "/api/v1/books/123/comments/5"
+    },
+    {
+      "method": "GET",
+      "target": "/api/v1/health"
+    },
+    {
+      "method": "GET",
+      "target": "/api/v1/version"
+    },
+    {
+      "method": "GET",
+      "target": "/api/v1/users"
+    },
+    {
+      "method": "POST",
+      "target": "/api/v1/users"
+    },
+    {
+      "method": "GET",
+      "target": "/api/v1/users/42"
+    },
+    {
+      "method": "PUT",
+      "target": "/api/v1/users/42"
+    },
+    {
+      "method": "DELETE",
+      "target": "/api/v1/users/42"
+    },
+    {
+      "method": "POST",
+      "target": "/api/v1/protected"
+    },
+    {
+      "method": "POST",
+      "target": "/api/v1/auth/login"
+    },
+    {
+      "method": "POST",
+      "target": "/api/v1/security/whoami"
+    },
+    {
+      "method": "GET",
+      "target": "/api/v1/admin/books"
+    },
+    {
+      "method": "POST",
+      "target": "/api/v1/admin/books"
+    },
+    {
+      "method": "PUT",
+      "target": "/api/v1/admin/books/9"
+    },
+    {
+      "method": "DELETE",
+      "target": "/api/v1/admin/books/9"
+    },
+    {
+      "method": "GET",
+      "target": "/api/v1/any/"
+    },
+    {
+      "method": "GET",
+      "target": "/api/v1/any/deep/nested/path"
+    },
+    {
+      "method": "GET",
+      "target": "/api/v1/any"
+    },
+    {
+      "method": "GET",
+      "target": "/api/v1/all/"
+    },
+    {
+      "method": "GET",
+      "target": "/api/v1/all/a/b/c.txt"
+    },
+    {
+      "method": "POST",
+      "target": "/api/v1/all/x"
+    },
+    {
+      "method": "GET",
+      "target": "/api/v2/books"
+    },
+    {
+      "method": "POST",
+      "target": "/api/v2/books"
+    },
+    {
+      "method": "PUT",
+      "target": "/api/v2/books"
+    },
+    {
+      "method": "GET",
+      "target": "/api/v2/books/55"
+    },
+    {
+      "method": "DELETE",
+      "target": "/api/v2/books/55"
+    },
+    {
+      "method": "POST",
+      "target": "/api/v2/products"
+    },
+    {
+      "method": "GET",
+      "target": "/api/v2/users/8"
+    },
+    {
+      "method": "POST",
+      "target": "/api/v2/login"
+    },
+    {
+      "method": "GET",
+      "target": "/api/v2/login"
+    },
+    {
+      "method": "POST",
+      "target": "/api/v2/admin/books"
+    },
+    {
+      "method": "PUT",
+      "target": "/api/v2/admin/books/3"
+    },
+    {
+      "method": "DELETE",
+      "target": "/api/v2/admin/books/3"
+    },
+    {
+      "method": "GET",
+      "target": "/api/v2/admin/whoami"
+    },
+    {
+      "method": "POST",
+      "target": "/api/v3/books"
+    },
+    {
+      "method": "PUT",
+      "target": "/api/v3/books"
+    },
+    {
+      "method": "GET",
+      "target": "/api/v3/books/11"
+    },
+    {
+      "method": "GET",
+      "target": "/api/v9/users/77"
+    },
+    {
+      "method": "GET",
+      "target": "/api/beta/users/77"
+    },
+    {
+      "method": "GET",
+      "target": "/api/v1/users/77/extra"
+    },
+    {
+      "method": "GET",
+      "target": "/v1/a"
+    },
+    {
+      "method": "POST",
+      "target": "/v1/c"
+    },
+    {
+      "method": "GET",
+      "target": "/v1/c"
+    },
+    {
+      "method": "GET",
+      "target": "/z/a"
+    },
+    {
+      "method": "GET",
+      "target": "/x/z"
+    },
+    {
+      "method": "GET",
+      "target": "/docs"
+    },
+    {
+      "method": "GET",
+      "target": "/docs/"
+    },
+    {
+      "method": "GET",
+      "target": "/openapi.json"
+    },
+    {
+      "method": "GET",
+      "target": "/openapi.yaml"
+    },
+    {
+      "method": "GET",
+      "target": "/openapi-3.0.json"
+    },
+    {
+      "method": "GET",
+      "target": "/openapi-3.1.json"
+    },
+    {
+      "method": "GET",
+      "target": "/swagger"
+    },
+    {
+      "method": "GET",
+      "target": "/redoc"
+    },
+    {
+      "method": "GET",
+      "target": "/scalar"
+    },
+    {
+      "method": "POST",
+      "target": "/openapi.json"
+    },
+    {
+      "method": "GET",
+      "target": "/static"
+    },
+    {
+      "method": "GET",
+      "target": "/static/"
+    },
+    {
+      "method": "GET",
+      "target": "/static/css/site.css"
+    },
+    {
+      "method": "POST",
+      "target": "/static/css/site.css"
+    },
+    {
+      "method": "GET",
+      "target": "/staticky"
+    },
+    {
+      "method": "GET",
+      "target": "/assets/app.js"
+    },
+    {
+      "method": "GET",
+      "target": "/assets/img/logo%20final.png"
+    },
+    {
+      "method": "GET",
+      "target": "/assets/../secret"
+    },
+    {
+      "method": "GET",
+      "target": "/does-not-exist"
+    },
+    {
+      "method": "POST",
+      "target": "/does-not-exist"
+    },
+    {
+      "method": "DELETE",
+      "target": "/api/v1/nope"
+    },
+    {
+      "method": "GET",
+      "target": "//books"
+    },
+    {
+      "method": "GET",
+      "target": "/books//42"
+    },
+    {
+      "method": "GET",
+      "target": "/BOOKS"
+    },
+    {
+      "method": "GET",
+      "target": "/caf%C3%A9/menu"
+    },
+    {
+      "method": "GET",
+      "target": "/naïve/path"
+    },
+    {
+      "method": "TRACE",
+      "target": "/"
+    },
+    {
+      "method": "GET",
+      "target": "/?q=1"
+    }
+  ]
+}
