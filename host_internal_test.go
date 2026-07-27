@@ -25,8 +25,6 @@ import (
 	"github.com/jkaninda/njia/internal/tree"
 )
 
-// --- host pattern unit tests -----------------------------------------------
-
 func TestParseHostPatternClassification(t *testing.T) {
 	tests := []struct {
 		pattern string
@@ -282,8 +280,6 @@ func refHostScore(p *hostPattern) int64 {
 	}
 	return int64(p.score)
 }
-
-// --- generated comparison ---------------------------------------------------
 
 func TestHostRoutingMatchesReferenceModel(t *testing.T) {
 	const tables = 400

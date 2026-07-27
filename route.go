@@ -21,6 +21,30 @@ import (
 // Middleware wraps a handler, returning the handler to invoke in its place.
 type Middleware func(http.Handler) http.Handler
 
+// MethodAny registers a handler for every HTTP method, including methods this
+// package has no named helper for and methods that are not in any RFC.
+//
+// It is what a reverse proxy needs: a gateway forwards whatever verb the client
+// sent — WebDAV's PROPFIND, a gRPC-Web POST, a vendor's custom verb — and
+// decides for itself which ones a backend accepts. Enumerating the methods at
+// registration time would make the router reject a verb the proxy would have
+// been happy to forward.
+//
+// A method registered explicitly always wins over the wildcard, so a route can
+// serve GET from one handler and everything else from another:
+//
+//	r.GET("/files/{path...}", readOnly)
+//	r.ANY("/files/{path...}", proxy)
+//
+// A path served by a wildcard never answers 405, because there is no method it
+// does not accept.
+const MethodAny = "*"
+
+// DefaultPriority is the priority a route has when none is given. Priorities
+// are compared with lower first, so a route can be pulled ahead of the default
+// with a negative value as well as pushed behind it with a positive one.
+const DefaultPriority = 0
+
 // Route is a registered method and pattern pair together with the handler that
 // serves it.
 type Route struct {
@@ -48,6 +72,9 @@ type Route struct {
 	segs []tree.Segment
 	// seq is the registration order, used to break specificity ties.
 	seq int
+	// priority orders this route against the others that match the same path,
+	// ahead of specificity. Lower sorts first; DefaultPriority is the middle.
+	priority int
 }
 
 // Method returns the HTTP method the route answers.
@@ -69,6 +96,10 @@ func (r *Route) Hosts() []string {
 
 // Name returns the route's name, or the empty string.
 func (r *Route) Name() string { return r.name }
+
+// Priority returns the route's matching priority. Lower sorts first, and
+// DefaultPriority is what a route carries when none was set.
+func (r *Route) Priority() int { return r.priority }
 
 // Handler returns the handler the route was registered with, before
 // middleware.
@@ -106,6 +137,9 @@ type RouteInfo struct {
 	Handler http.Handler
 	// Meta carries the route's user annotations.
 	Meta map[string]any
+	// Priority is the route's matching priority, lower first. It is
+	// DefaultPriority unless WithPriority set it.
+	Priority int
 }
 
 // info renders the route for introspection.
@@ -117,6 +151,7 @@ func (r *Route) info() RouteInfo {
 		Hosts:        r.Hosts(),
 		Handler:      r.raw,
 		Params:       r.Params(),
+		Priority:     r.priority,
 	}
 	if len(r.meta) > 0 {
 		ri.Meta = make(map[string]any, len(r.meta))
@@ -133,6 +168,29 @@ type RouteOption func(*Route)
 // WithName gives the route a name, which must be unique within the router.
 func WithName(name string) RouteOption {
 	return func(r *Route) { r.name = name }
+}
+
+// WithPriority orders a route against the others whose patterns also match a
+// request, ahead of specificity. Lower sorts first.
+//
+// Specificity is the right default: given "/api/v1/{rest...}" and
+// "/api/{rest...}", the longer prefix is almost always the one meant to serve
+// "/api/v1/x". A gateway loading routes from user configuration sometimes needs
+// the opposite — a catch-all that deliberately shadows a more specific route
+// during a migration, say — and specificity alone cannot express that.
+//
+//	r.ANY("/api/{rest...}", maintenance, njia.WithPriority(-1))
+//	r.ANY("/api/v1/{rest...}", backend)
+//
+// Here the maintenance handler wins for every path under /api despite being the
+// less specific pattern.
+//
+// Routes that share a path pattern share its priority: the lowest one any of
+// them asks for applies to all, because priority orders patterns against each
+// other and a pattern is matched before a method is chosen. Leaving priority
+// unset everywhere costs nothing and keeps pure specificity ordering.
+func WithPriority(p int) RouteOption {
+	return func(r *Route) { r.priority = p }
 }
 
 // WithMeta attaches an arbitrary annotation to the route. Annotations are

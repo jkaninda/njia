@@ -88,6 +88,31 @@ r.HandleFunc("PURGE", "/cache/{key...}", purge)
 A route registered for `GET` also answers `HEAD`, and the `Allow` header of a
 405 lists `HEAD` alongside `GET` accordingly.
 
+#### Every method: `ANY`
+
+`ANY` registers one handler for every method, including verbs no RFC names:
+
+```go
+r.ANY("/api/{rest...}", proxy)
+```
+
+This is what a reverse proxy needs. A gateway forwards whatever verb the client
+sent — WebDAV's `PROPFIND`, a vendor's custom verb — and lets the backend decide
+what it accepts; enumerating methods at registration time would make the router
+reject a request the proxy would have been happy to forward.
+
+An explicitly registered method always wins over the wildcard, so one route can
+serve a verb specially and proxy the rest:
+
+```go
+r.GET("/files/{path...}", readFromCache)  // GET comes from here
+r.ANY("/files/{path...}", proxy)          // everything else from here
+```
+
+A path served by `ANY` never answers 405, because there is no method it rejects.
+The `*` sentinel is a registration detail and never appears in an `Allow`
+header.
+
 ### Options
 
 ```go
@@ -100,6 +125,7 @@ api.POST("/orders", createOrder, njia.WithName("createOrder"))
 | `WithMeta(key, value)` | Attaches an arbitrary annotation, surfaced by `Routes()`. |
 | `WithHost(patterns...)` | Restricts this route to host patterns, overriding its group's. |
 | `WithMiddleware(mw...)` | Wraps only this route, inside any group middleware. |
+| `WithPriority(n)` | Orders this route ahead of specificity; lower first. See [Match order](#match-order). |
 
 Registration returns an error instead of panicking — see [Errors](#errors).
 
@@ -150,6 +176,31 @@ have matched.
 
 Host specificity is considered after path specificity — see
 [Host matching](#host-matching).
+
+#### Overriding it: `WithPriority`
+
+Specificity is the right default — given `/api/v1/{rest...}` and
+`/api/{rest...}`, the longer prefix is almost always what should serve
+`/api/v1/x`. A gateway assembling routes from user configuration sometimes needs
+the opposite, and specificity alone cannot express it:
+
+```go
+r.ANY("/api/{rest...}", maintenance, njia.WithPriority(-1))
+r.ANY("/api/v1/{rest...}", backend)
+// GET /api/v1/x -> maintenance, despite being the less specific pattern
+```
+
+Priority is compared before specificity, **lower first**. `DefaultPriority` is
+`0`, so a negative value pulls a route ahead of everything unmarked and a
+positive one pushes it behind.
+
+Two details worth knowing:
+
+- Routes sharing a path pattern share the lowest priority any of them asked for,
+  because ordering picks a pattern before it picks a method.
+- Priorities disable the lookup fast paths for the whole table, since those
+  answer with the most specific match without consulting other candidates.
+  Leaving priority unset everywhere — the default — costs nothing.
 
 ### Groups and middleware
 
@@ -273,7 +324,12 @@ if err := r.GET("/users/{id", handler); err != nil {
 ```
 
 This matters for gateways that build routes from user-supplied configuration: a
-bad entry is rejected, not fatal.
+bad entry is rejected, not fatal. Paired with [`Swap`](#hot-reload), a whole
+table is validated off to the side and installed only if it is sound, so a typo
+in someone's YAML can never take the process down.
+
+Routes fixed in code can be checked in one place rather than at every call, with
+`Builder.Err()` after registering, or by letting a bad table fail the `Swap`.
 
 ### Sentinels
 
@@ -492,10 +548,20 @@ go test -run '^$' -bench . -benchmem -count=6 ./bench/...
 go run golang.org/x/perf/cmd/benchstat@latest -col /size <output>
 ```
 
-**No numbers are published here on purpose.** Router benchmarks are dominated by
-the shape of the route table and by the machine, and a ratio quoted out of that
-context is closer to marketing than to information — the honest version is the
-grid, run on your own hardware against a table shaped like yours.
+### Feature costs
+
+`BenchmarkGateway_*` measures the two proxy features against the same table
+registered without them. These are native-only and sit outside the cross-engine
+grid, because gorilla has no equivalent of either and a comparison against an
+engine doing something different says nothing.
+
+```sh
+go test -run '^$' -bench 'BenchmarkGateway_' -benchmem -count=6 ./bench/...
+```
+
+Unlike the grid, both sides of each comparison come from one binary, so the
+alignment noise described below does not apply and the deltas are readable
+directly. Two properties are worth confirming on your own hardware.
 
 ### Reading a run
 
