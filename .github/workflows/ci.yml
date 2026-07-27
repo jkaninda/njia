@@ -81,20 +81,3 @@ jobs:
           for seed in 1 2 3 4 5; do
             go test -run TestGenerated -gen.cases=40000 -gen.seed=$seed -timeout 30m .
           done
-
-  bench:
-    name: Benchmark grid (informational)
-    runs-on: ubuntu-latest
-    defaults:
-      run:
-        working-directory: internal/difftest
-    steps:
-      - uses: actions/checkout@v7
-      - uses: actions/setup-go@v7
-        with:
-          go-version: "1.23"
-      - run: go test -run '^$' -bench . -benchmem ./bench/... | tee bench.txt
-      - uses: actions/upload-artifact@v7
-        with:
-          name: benchmarks
-          path: internal/difftest/bench.txt

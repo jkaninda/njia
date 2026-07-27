@@ -1,7 +1,12 @@
-# Njia
+# njia - A fast, zero-dependency HTTP router for Go
 
-> **A fast, zero-dependency HTTP router for Go.**
->
+[![CI](https://github.com/jkaninda/njia/actions/workflows/ci.yml/badge.svg?branch=main)](https://github.com/jkaninda/njia/actions/workflows/ci.yml)
+[![Benchmarks](https://github.com/jkaninda/njia/actions/workflows/bench.yml/badge.svg?branch=main)](https://github.com/jkaninda/njia/actions/workflows/bench.yml)
+[![Go Reference](https://pkg.go.dev/badge/github.com/jkaninda/njia.svg)](https://pkg.go.dev/github.com/jkaninda/njia)
+[![Go](https://img.shields.io/badge/go-1.23%2B-00ADD8?logo=go&logoColor=white)](https://go.dev/dl/)
+[![License](https://img.shields.io/badge/license-Apache--2.0-blue.svg)](LICENSE)
+
+
 > Native routing for modern Go applications, plus a drop-in compatibility layer for migrating from `gorilla/mux`.
 
 **njia** (Swahili: *path, way*) is an HTTP router built around three principles:
@@ -13,11 +18,6 @@
 Whether you're building a REST API, reverse proxy, API gateway, or platform, Njia provides a modern router that is fast, introspectable, and safe to use in production.
 
 The main module has **zero** `require` entries and imports **only the Go standard library**. `gorilla/mux` is used exclusively in a separate test module (`internal/difftest`) to verify behavioral compatibility.
-
-[![Go Reference](https://pkg.go.dev/badge/github.com/jkaninda/njia.svg)](https://pkg.go.dev/github.com/jkaninda/njia)
-[![Go Report Card](https://goreportcard.com/badge/github.com/jkaninda/njia)](https://goreportcard.com/report/github.com/jkaninda/njia)
-[![Go](https://img.shields.io/badge/go-1.23%2B-00ADD8?logo=go&logoColor=white)](https://go.dev/dl/)
-[![License](https://img.shields.io/badge/license-Apache--2.0-blue.svg)](LICENSE)
 
 ## Installation
 
