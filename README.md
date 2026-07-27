@@ -1,33 +1,67 @@
 # Njia
 
-**njia** (Swahili: *path, way*) is a zero-dependency HTTP router for Go.
+> **A fast, zero-dependency HTTP router for Go.**
+>
+> Native routing for modern Go applications, plus a drop-in compatibility layer for migrating from `gorilla/mux`.
 
-It has two public surfaces:
+**njia** (Swahili: *path, way*) is an HTTP router built around three principles:
 
-| Surface | Import path | Purpose |
-|---|---|---|
-| Native API | `github.com/jkaninda/njia` | The real product. Fast, introspectable, allocation-conscious. |
-| Compat API | `github.com/jkaninda/njia/muxcompat` | Drop-in replacement for `github.com/gorilla/mux`. A migration bridge. |
+* Fast request matching
+* Zero dependencies
+* Easy migration from `gorilla/mux`
 
-The main module has **zero** `require` entries and imports nothing outside the
-standard library. `gorilla/mux` appears only in a separate, test-only module
-under `internal/difftest`, which is how behavioral parity is verified.
+Whether you're building a REST API, reverse proxy, API gateway, or platform, Njia provides a modern router that is fast, introspectable, and safe to use in production.
 
----
+The main module has **zero** `require` entries and imports **only the Go standard library**. `gorilla/mux` is used exclusively in a separate test module (`internal/difftest`) to verify behavioral compatibility.
 
-## Native API
+[![Go Reference](https://pkg.go.dev/badge/github.com/jkaninda/njia.svg)](https://pkg.go.dev/github.com/jkaninda/njia)
+[![Go Report Card](https://goreportcard.com/badge/github.com/jkaninda/njia)](https://goreportcard.com/report/github.com/jkaninda/njia)
+[![Go](https://img.shields.io/badge/go-1.23%2B-00ADD8?logo=go&logoColor=white)](https://go.dev/dl/)
+[![License](https://img.shields.io/badge/license-Apache--2.0-blue.svg)](LICENSE)
+
+## Installation
+
+```bash
+go get github.com/jkaninda/njia
+```
+
+For `gorilla/mux` compatibility:
+
+```bash
+go get github.com/jkaninda/njia/muxcompat
+```
+
+
+
+## Quickstart
 
 ```go
-r := njia.New()
+package main
 
-r.GET("/healthz", healthHandler)
-r.GET("/users/{id}", getUser)
-r.GET("/files/{rest...}", serveFile)
+import (
+    "log"
+    "net/http"
 
-api := r.Group("/api/v1", authMiddleware, rateLimitMiddleware)
-api.POST("/orders", createOrder, njia.WithName("createOrder"))
+    "github.com/jkaninda/njia"
+)
 
-log.Fatal(http.ListenAndServe(":8080", r))
+func main() {
+    r := njia.New()
+
+    r.GET("/healthz", healthHandler)
+    r.GET("/users/{id}", getUser)
+    r.GET("/files/{rest...}", serveFile)
+
+    api := r.Group(
+        "/api/v1",
+        authMiddleware,
+        rateLimitMiddleware,
+    )
+
+    api.POST("/orders", createOrder)
+
+    log.Fatal(http.ListenAndServe(":8080", r))
+}
 ```
 
 Read a parameter without building a map:
@@ -39,28 +73,43 @@ func getUser(w http.ResponseWriter, r *http.Request) {
 }
 ```
 
-### Registration returns errors, never panics
+## Routing
+
+### Registering routes
+
+`GET`, `POST`, `PUT`, `PATCH`, `DELETE`, `HEAD` and `OPTIONS` are shorthands for
+`Handle`, which takes any method:
 
 ```go
-if err := r.GET("/users/{id", handler); err != nil {
-    // njia: route GET "/users/{id": njia: malformed route pattern: ...
-}
+r.Handle("REPORT", "/calendars/{id}", reportHandler)
+r.HandleFunc("PURGE", "/cache/{key...}", purge)
 ```
 
-Every failure is a typed sentinel (`ErrBadPattern`, `ErrDuplicateRoute`,
-`ErrParamConflict`, `ErrCatchAllPosition`, `ErrBadHost`, …) wrapped in
-a `*RouteError` that names the offending method and pattern. This matters for
-gateways that build routes from user-supplied configuration: a bad entry is
-rejected, not fatal.
+A route registered for `GET` also answers `HEAD`, and the `Allow` header of a
+405 lists `HEAD` alongside `GET` accordingly.
+
+### Options
+
+```go
+api.POST("/orders", createOrder, njia.WithName("createOrder"))
+```
+
+| Option | Effect |
+|---|---|
+| `WithName(name)` | Names the route; must be unique. Retrieve with `Router.Route(name)`. |
+| `WithMeta(key, value)` | Attaches an arbitrary annotation, surfaced by `Routes()`. |
+| `WithHost(patterns...)` | Restricts this route to host patterns, overriding its group's. |
+| `WithMiddleware(mw...)` | Wraps only this route, inside any group middleware. |
+
+Registration returns an error instead of panicking — see [Errors](#errors).
 
 ### Parameters
 
-`{id}` matches any single non-empty segment, and `{rest...}` absorbs the
-remainder of the path including slashes. A placeholder carries a name and
-nothing else.
+`{id}` matches any single non-empty segment. `{rest...}` absorbs the remainder
+of the path including slashes, and must be the last segment. A placeholder
+carries a name and nothing else.
 
-`{id:constraint}` is rejected rather than ignored, so a pattern that looks like
-it filters values can never silently match everything:
+#### Constraints are rejected, not ignored
 
 ```go
 err := r.GET("/users/{id:int}", getUser)
@@ -68,16 +117,88 @@ err := r.GET("/users/{id:int}", getUser)
 // "{id:int}" constrains "id", which this router does not support; write {id}
 ```
 
-Validate values in the handler, where a bad one can produce a useful 400 rather
-than falling through to a 404. `muxcompat` accepts gorilla's `{id:[0-9]+}`
-regular expressions if you need matching to depend on the value.
+A pattern that looks like it filters values can never silently match
+everything. Validate in the handler, where a bad value produces a useful 400
+rather than falling through to a 404. If you need matching itself to depend on
+the value, [`muxcompat`](#migrating-from-gorillamux) accepts gorilla's
+`{id:[0-9]+}`.
+
+#### Reading captured values
+
+| Call | Returns | Allocates |
+|---|---|---|
+| `Param(r, "id")` | The value, or `""`. | no |
+| `ParamAt(r, i)` | `(name, value, ok)` in pattern order. | no |
+| `NumParams(r)` | How many were captured. | no |
+| `AppendParams(r, dst)` | Appends every parameter to `dst`. | no, given capacity |
+| `ParamMap(r)` | `map[string]string`, the shape gorilla's `Vars` returned. | yes |
+| `RouteOf(r)` | The `*Route` that matched. | no |
+
+`SetParams(req, params...)` attaches parameters to a request, for tests that
+invoke a handler directly rather than through the router.
+
+Parameters are captured into a fixed-size array carried by the request context
+and spill to the heap only past that size. A static route declares no
+parameters and so writes nothing to the context at all.
+
+### Match order
 
 Routes are matched most-specific-first: a static segment beats a wildcard,
 which beats a catch-all, resolved position by position from the left. Matching
 backtracks, so a static branch that dead-ends never hides a wildcard that would
 have matched.
 
-### Host matching
+Host specificity is considered after path specificity — see
+[Host matching](#host-matching).
+
+### Groups and middleware
+
+A group prefixes patterns and wraps handlers, and nests:
+
+```go
+api := r.Group("/api/v1", authMiddleware)
+v1u := api.Group("/users", auditMiddleware)
+v1u.GET("/{id}", getUser)                    // GET /api/v1/users/{id}
+
+api.Use(rateLimitMiddleware)                 // applies to this group only
+api.Prefix()                                 // "/api/v1"
+api.Hosts()                                  // host patterns, if restricted
+```
+
+Order, outermost first: router middleware, then each enclosing group's
+middleware from outer to inner, then the route's own `WithMiddleware`, then the
+handler. This is tested, not merely documented. `Router.Use` applies to every
+route, including ones registered before the call.
+
+### Router configuration
+
+Every field is off by default. Set them on a router from `New()`, which is the
+only supported way to construct one — the zero `Router` has no route table and
+panics on registration.
+
+```go
+r := njia.New()
+r.NotFound = http.HandlerFunc(myNotFound)
+r.MethodNotAllowed = http.HandlerFunc(my405)
+r.CleanPath = true
+r.RedirectTrailingSlash = true
+r.RouteInContext = true
+```
+
+| Field | Effect when set |
+|---|---|
+| `NotFound` | Serves unmatched requests. Default: `http.NotFoundHandler`. |
+| `MethodNotAllowed` | Serves a path hit with the wrong method. Default: 405 plus an `Allow` header. |
+| `CleanPath` | Redirects a non-canonical path to its cleaned form with 301 — `/a//b` → `/a/b`. |
+| `RedirectTrailingSlash` | Redirects `/x/` to `/x`, or `/x` to `/x/`, when only the other is registered. Without it, the other form is a 404. |
+| `RouteInContext` | Makes `RouteOf` work for static routes too, at one allocation per request. |
+
+`RouteInContext` exists because a static route otherwise attaches nothing to the
+request. Leave it off unless handlers actually need the matched route.
+
+---
+
+## Host matching
 
 ```go
 gw := r.Host("api.example.com", "*.api.example.com")
@@ -87,7 +208,9 @@ r.Host("{tenant}.app.example.com").GET("/dashboard", dashboard)  // njia.Param(r
 r.GET("/healthz", health)                                        // every host
 ```
 
-Accepted patterns, most specific first:
+### Patterns
+
+Most specific first:
 
 | Pattern | Matches |
 |---|---|
@@ -97,19 +220,25 @@ Accepted patterns, most specific first:
 | `*.example.com` | one or more leading labels |
 | `{sub...}.example.com` | one or more leading labels, captured |
 | `{host...}` | any host, captured whole |
-| `*` | any host |
+| `*` | any host — also spelled `njia.AnyHost` |
 
 Matching is case-insensitive and ignores a trailing dot, so `API.Example.COM.`
 and `api.example.com` are the same name. A pattern that names a port only
 matches requests carrying that port; one that does not, ignores the port
-entirely. `WithHost(...)` restricts a single route and overrides its group.
-`ValidateHost` checks a pattern without registering anything, so a gateway can
-reject a bad configuration entry before building a table.
+entirely.
 
-**Precedence.** Path specificity is decided first, host specificity second,
-registration order last. A global `/healthz` therefore stays reachable
-underneath a per-host catch-all proxy route — which is exactly how a gateway
-needs it:
+`WithHost(...)` restricts a single route and overrides its group.
+`ValidateHost` checks a pattern without registering anything.
+
+A host parameter is reported by `Routes()` before any path parameter, marked
+`InHost` with a `Position` of `-1`, and is read with `njia.Param` like any
+other.
+
+### Precedence
+
+Path specificity is decided first, host specificity second, registration order
+last. A global `/healthz` therefore stays reachable underneath a per-host
+catch-all proxy route — which is exactly how a gateway needs it:
 
 ```go
 r.GET("/healthz", health)                                  // wins on every host
@@ -118,31 +247,112 @@ r.Host("okapi.example.com").GET("/{rest...}", proxyOkapi)  // everything else
 
 Within one path pattern, hosts are consulted from most to least specific, and a
 variant that does not serve the request's method falls through to a less
-specific one. A path that exists but not on the requested host is a 404; a path
-that exists on that host but not for that method is a 405, and the `Allow`
-header only lists methods that host actually serves.
+specific one.
+
+- A path that exists but not on the requested host is a **404**.
+- A path that exists on that host but not for that method is a **405**, and the
+  `Allow` header only lists methods that host actually serves.
+
+### Cost
 
 Exact hosts are indexed by name, so a gateway with a thousand virtual hosts
 costs one map lookup, not a thousand comparisons. Tables that use no host
 constraint at all never read the request's host — the feature costs them
 nothing.
 
-### Introspection
+---
+
+## Errors
+
+Registration returns errors and never panics:
+
+```go
+if err := r.GET("/users/{id", handler); err != nil {
+    // njia: route GET "/users/{id": njia: malformed route pattern: ...
+}
+```
+
+This matters for gateways that build routes from user-supplied configuration: a
+bad entry is rejected, not fatal.
+
+### Sentinels
+
+Every failure is a typed sentinel wrapped in a `*RouteError` that names the
+offending method and pattern.
+
+| Sentinel | Cause |
+|---|---|
+| `ErrBadPattern` | Malformed template. |
+| `ErrNoLeadingSlash` | Pattern does not start with `/`. |
+| `ErrDuplicateRoute` | Same method and pattern registered twice. |
+| `ErrDuplicateName` | Two routes given the same name. |
+| `ErrParamConflict` | Conflicting parameter names at one position. |
+| `ErrCatchAllPosition` | `{rest...}` is not the last segment. |
+| `ErrNoHandler` | Route registered without a handler. |
+| `ErrEmptyMethod` | Route registered without a method. |
+| `ErrBadHost` | Malformed host pattern. |
+
+### `*RouteError`
+
+Exposes `Method`, `Pattern` and `Err`, and implements `Unwrap`:
+
+```go
+if errors.Is(err, njia.ErrDuplicateRoute) {
+    ...
+}
+
+var rerr *njia.RouteError
+if errors.As(err, &rerr) {
+    log.Printf("bad route %s %s: %v", rerr.Method, rerr.Pattern, rerr.Err)
+}
+```
+
+`Builder` accumulates errors so a gateway can report every problem in a
+configuration file rather than only the first — see [Hot reload](#hot-reload).
+`ValidateHost` checks a host pattern without registering anything, so a bad
+configuration entry can be rejected before a table is built.
+
+---
+
+## Introspection
 
 ```go
 for _, ri := range r.Routes() {
     fmt.Println(ri.Method, ri.PathTemplate, ri.Params, ri.Meta)
 }
+
+route := r.Route("createOrder")   // by name
+fmt.Println(r.String())           // whole table, for start-up logs
 ```
 
-`RouteInfo` carries the template as written, the host patterns it answers on,
-each parameter's name and position (host parameters are reported first, marked
-`InHost`), the handler, and any annotations attached with `WithMeta`. An OpenAPI
-generator needs nothing else — in particular it never has to reconstruct a
-template from a compiled regular expression. Value types are not part of the
-pattern, so a generator carries schema information in `WithMeta`.
+`RouteInfo` carries `Name`, `Method`, `PathTemplate` as written, `Hosts`,
+`Params`, the `Handler` before middleware, and any `Meta` annotations. Each
+`ParamInfo` gives `Name`, `Position`, `CatchAll` and `InHost`.
 
-### Atomic hot reload
+An OpenAPI generator needs nothing else — in particular it never has to
+reconstruct a template from a compiled regular expression. Value types are not
+part of the pattern, so a generator carries schema information in `WithMeta`.
+
+A `*Route` obtained from `Route(name)` or `RouteOf(req)` exposes the same
+information through `Method()`, `Pattern()`, `Hosts()`, `Name()`, `Handler()`,
+`Params()` and `Meta(key)`.
+
+### Matching without serving
+
+```go
+route, ok := r.Lookup(req)                      // no allocation, no parameters
+
+var buf [8]njia.PathParam
+route, params, ok := r.LookupInto(req, buf[:0]) // no allocation, with parameters
+```
+
+Useful for authorization checks, metrics labelled by route template, and
+anything that needs to know which route *would* serve a request without
+serving it.
+
+---
+
+## Hot reload
 
 ```go
 err := r.Swap(func(b *njia.Builder) error {
@@ -160,15 +370,27 @@ running table is untouched. On success it is installed with a single atomic
 pointer store; in-flight requests finish against the old table and there is no
 lock anywhere on the request path.
 
-### Middleware ordering
+### Builder
 
-Router middleware is outermost, then each enclosing group's middleware from
-outer to inner, then the route's own middleware, then the handler. This is
-tested, not merely documented.
+A `Builder` can also be built and inspected on its own, which lets a gateway
+report every problem in a configuration file rather than only the first:
+
+```go
+b := njia.NewBuilder()
+for _, route := range configFromYAML() {
+    _ = b.Handle(route.Method, route.Path, route.Handler)
+}
+if errs := b.Errs(); len(errs) > 0 {
+    return fmt.Errorf("%d bad routes: %w", len(errs), b.Err())
+}
+```
+
+`Builder` carries the same registration surface as `Router` — `Use`, `Group`,
+`Host`, `Handle`, `HandleFunc` and the method shorthands.
 
 ---
 
-## Compat API
+## Migrating from gorilla/mux
 
 `gorilla/mux` was archived in December 2022 and has been effectively dormant
 since. `muxcompat` lets a project move off it with an import rewrite:
@@ -181,7 +403,9 @@ since. `muxcompat` lets a project move off it with an import rewrite:
 Nothing else changes. The package reproduces gorilla's exported API and its
 observable behavior — route ordering, strict-slash redirects, path cleaning,
 `MatchErr` propagation, subrouter matcher inheritance, reverse URL building,
-`Walk`, `CORSMethodMiddleware` — including the corners that are surprising:
+`Walk`, `CORSMethodMiddleware`.
+
+### Including the surprising corners
 
 - `Queries` with an odd number of arguments records an error **and returns
   nil**, so chaining onto it panics. Reproduced, because callers may depend on
@@ -192,11 +416,11 @@ observable behavior — route ordering, strict-slash redirects, path cleaning,
 - `Queries("k", "")` matches the key with any value.
 - A capturing group inside a variable pattern panics at registration.
 
-Where njia deliberately differs from gorilla, it is only by being more robust:
-a handful of inputs make gorilla fault at runtime (`nil pointer dereference`,
-`slice bounds out of range`) and njia serves them instead. The differential
-harness treats a gorilla runtime fault as a gorilla bug and only requires that
-njia does not fault differently.
+Where njia deliberately differs, it is only by being more robust: a handful of
+inputs make gorilla fault at runtime (`nil pointer dereference`, `slice bounds
+out of range`) and njia serves them instead. The differential harness treats a
+gorilla runtime fault as a gorilla bug and only requires that njia does not
+fault differently.
 
 ### Not the destination
 
@@ -207,7 +431,7 @@ root `njia` package; the two surfaces evolve independently on top of shared
 
 ---
 
-## How correctness is established
+## Correctness
 
 Behavior is never written from memory or from documentation prose. Every
 gorilla behavior njia reproduces was first observed by running real gorilla.
@@ -239,14 +463,14 @@ gorilla behavior njia reproduces was first observed by running real gorilla.
   tables over every combination of 11 hosts, 13 paths and 5 methods — about
   286,000 comparisons. It is what caught the specificity bug that let
   `/api/{rest...}` shadow `/api`.
+- **Allocation counts are asserted, not hoped for.** Dedicated tests require a
+  static match to serve with zero allocations and the tree lookup to capture
+  parameters without allocating, so a regression fails the build rather than
+  quietly showing up in a benchmark later.
 
 ---
 
 ## Performance
-
-Measured with `internal/difftest/bench`, which compares gorilla/mux, the
-standard library `ServeMux`, chi and both njia surfaces at 10, 100 and 1000
-routes.
 
 The native router matches with a segment-indexed prefix tree and a direct map
 lookup for fully static patterns. `muxcompat` splits its table: routes that are
@@ -255,19 +479,37 @@ into the tree, everything else stays on an ordered scan, and registration
 sequence numbers are compared across the two so gorilla's
 first-registered-wins ordering is preserved exactly.
 
+`internal/difftest/bench` compares gorilla/mux, the standard library
+`ServeMux`, chi and both njia surfaces at 10, 100 and 1000 routes, across static
+hits, parameter hits, deep nested hits, 404 misses, 405 mismatches,
+virtual-host routing and table registration.
+
 Run the grid yourself:
 
-```
+```sh
 cd internal/difftest
-go test -run '^$' -bench . -benchmem -benchtime=500ms -count=6 ./bench/...
+go test -run '^$' -bench . -benchmem -count=6 ./bench/...
 go run golang.org/x/perf/cmd/benchstat@latest -col /size <output>
 ```
 
-`-count=6` and `benchstat` are not optional ceremony: a single pass is noisy
-enough that machine drift reads as a real regression. When comparing two
-revisions, check the `stdlib` and `chi` rows first — their code does not change
-between njia revisions, so if they moved, the machine moved and nothing can be
-attributed to njia.
+**No numbers are published here on purpose.** Router benchmarks are dominated by
+the shape of the route table and by the machine, and a ratio quoted out of that
+context is closer to marketing than to information — the honest version is the
+grid, run on your own hardware against a table shaped like yours.
+
+### Reading a run
+
+- **`-count=6` and `benchstat` are not optional ceremony.** A single pass is
+  noisy enough that machine drift reads as a real regression.
+- **A delta under roughly 6% is not attributable.** When comparing two njia
+  revisions, read the `gorilla`, `stdlib` and `chi` rows first. Their code is
+  identical between revisions, yet they still move by several percent, because
+  two different njia binaries shift code alignment around unrelated functions.
+  That floor is a property of the binaries, not of the machine, so no amount of
+  repetition or interleaving removes it. Promote a delta to real only if it
+  clears the band *and* is corroborated — the `Lookup/*` rows, which measure
+  matching without `ServeHTTP`, are a good independent check on the `Router_*`
+  rows.
 
 The grid also contains `TestGridSanity` and `TestHostGridSanity`, which assert
 that every engine really returns 200/404/405 for the scenarios it is
@@ -275,7 +517,7 @@ benchmarked on, so no router can look fast by quietly 404ing.
 
 ---
 
-## Licensing
+## License
 
-njia is Apache-2.0. Test cases and fixtures adapted from gorilla/mux are
-BSD-3-Clause and retain their original copyright header; see `NOTICE`.
+Apache-2.0. Test cases and fixtures adapted from gorilla/mux are BSD-3-Clause
+and retain their original copyright header; see [`NOTICE`](NOTICE).
