@@ -44,6 +44,31 @@ of specificity, so a catch-all can deliberately shadow a more specific route:
 
 	r.ANY("/api/{rest...}", maintenance, njia.WithPriority(-1))
 
+Mount hands a whole subtree to one handler, which is how another router, a file
+server or a debug endpoint is attached to a path. The prefix is not stripped:
+
+	r.Mount("/debug/pprof", pprofHandler)
+
+# Middleware ordering
+
+Middleware is resolved when the table is compiled, not when a route is
+registered, so Use is not positional: it covers everything in its scope
+whatever the order. Router.Use and Group.Use behave alike, differing only in
+what they cover, and a route or child group that already existed is wrapped
+just as one created afterwards.
+
+	api := r.Group("/api")
+	v1 := api.Group("/v1")
+	v1.GET("/orders", listOrders)
+	api.Use(auth)              // covers /api/v1/orders too
+
+To wrap only some routes, nest a group or attach the middleware to the route
+with WithMiddleware, so the scope is visible in the structure rather than
+dependent on where a line sits.
+
+Applied outermost first: router middleware, then each enclosing group from the
+outside in, then the route's own, then the handler.
+
 Package github.com/jkaninda/njia/muxcompat is a separate, drop-in replacement
 for github.com/gorilla/mux, for projects migrating away from it.
 */
@@ -172,6 +197,31 @@ func (r *Router) OPTIONS(pattern string, h http.Handler, opts ...RouteOption) er
 // forwarding arbitrary verbs needs. See MethodAny.
 func (r *Router) ANY(pattern string, h http.Handler, opts ...RouteOption) error {
 	return r.Handle(MethodAny, pattern, h, opts...)
+}
+
+// Err returns the first registration error recorded on the router, so that a
+// caller which ignored individual return values can still check the table as a
+// whole before serving:
+//
+//	api := r.Group("/api/v1", auth)
+//	api.GET("/orders", listOrders)
+//	api.POST("/orders", createOrder)
+//	if err := r.Err(); err != nil {
+//	    log.Fatalf("route table: %v", err)
+//	}
+//
+// It is the Router-level equivalent of Builder.Err.
+func (r *Router) Err() error {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	return r.b.Err()
+}
+
+// Errs returns every registration error recorded on the router.
+func (r *Router) Errs() []error {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	return r.b.Errs()
 }
 
 // Group returns a group that prefixes its patterns and wraps its handlers.

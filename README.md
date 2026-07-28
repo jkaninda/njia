@@ -207,19 +207,87 @@ Two details worth knowing:
 A group prefixes patterns and wraps handlers, and nests:
 
 ```go
-api := r.Group("/api/v1", authMiddleware)
+api := r.Group("/api/v1", authMiddleware, rateLimitMiddleware)
 v1u := api.Group("/users", auditMiddleware)
 v1u.GET("/{id}", getUser)                    // GET /api/v1/users/{id}
 
-api.Use(rateLimitMiddleware)                 // applies to this group only
 api.Prefix()                                 // "/api/v1"
 api.Hosts()                                  // host patterns, if restricted
 ```
 
 Order, outermost first: router middleware, then each enclosing group's
 middleware from outer to inner, then the route's own `WithMiddleware`, then the
-handler. This is tested, not merely documented. `Router.Use` applies to every
-route, including ones registered before the call.
+handler. This is tested, not merely documented.
+
+#### `Use` is not positional
+
+Middleware is resolved when the table is compiled, not when a route is
+registered, so where a `Use` call sits among the registrations does not change
+what it covers. A route registered before it is wrapped just like one
+registered after, and so is a child group created before it:
+
+```go
+api := r.Group("/api")
+v1 := api.Group("/v1")       // created before the Use
+api.Use(auth)                // covers v1 as well
+v2 := api.Group("/v2")       // and v2
+
+v1.GET("/orders", list)      // authenticated
+v2.GET("/orders", list)      // authenticated
+```
+
+`Router.Use` and `Group.Use` behave the same way; the only difference is scope.
+This matches `gorilla/mux`, whose middleware ran at match time and so applied
+whatever the registration order — code moved across keeps working, and moving a
+`Use` call up or down a file can never silently drop authentication.
+
+To wrap only some routes, say so structurally rather than by ordering:
+
+```go
+api := r.Group("/api")
+api.GET("/public", public)                    // no auth
+
+secure := api.Group("/admin", auth)           // scope is visible here
+secure.GET("/settings", settings)
+```
+
+or attach it to a single route with `WithMiddleware`.
+
+### Mounting a handler
+
+`Mount` hands every request at or below a prefix to one handler, for every
+method — another router, a file server, a debug endpoint:
+
+```go
+r.Mount("/debug/pprof", pprofHandler)
+r.Mount("/static", http.FileServer(http.Dir("public")))
+r.Mount("/legacy", oldRouter)
+```
+
+Both the prefix and its subtree are covered, so `/static` and
+`/static/css/app.css` both reach the handler, and matching is segment-bounded:
+mounting `/api` does not capture `/apiary`.
+
+**The prefix is not stripped.** A proxy needs the path as it arrived, and a
+handler that wants it removed can say so, which reads better than a routing rule
+that silently rewrites:
+
+```go
+r.Mount("/static", http.StripPrefix("/static", fs))
+```
+
+A more specific route still wins, which is how an exception is carved out of a
+mount:
+
+```go
+r.Mount("/api", proxy)
+r.GET("/api/health", localHealth)   // served locally, not proxied
+```
+
+The remainder is captured under `MountParam`. Because that name is fixed,
+mounting and separately registering a *differently named catch-all at the same
+position* conflict — `r.Mount("/admin", h)` then `r.GET("/admin/{files...}", x)`
+returns `ErrParamConflict`. A plain `{id}` parameter there is fine.
 
 ### Router configuration
 

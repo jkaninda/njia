@@ -143,26 +143,66 @@ func (b *Builder) ANY(pattern string, h http.Handler, opts ...RouteOption) error
 // the route's own middleware, then the handler.
 type Group struct {
 	b      *Builder
+	parent *Group
 	prefix string
-	mw     []Middleware
-	hosts  []string
+	// own is the middleware added to this group alone. An enclosing group's
+	// middleware is reached through parent rather than copied in, so that Use
+	// on an ancestor is visible to a group that already exists.
+	own   []Middleware
+	hosts []string
+}
+
+// chainTo appends the group's middleware to dst, outermost first: every
+// ancestor from the outside in, then the group's own.
+//
+// It is resolved when the table is compiled rather than when a route is
+// registered, which is what makes Use order-independent.
+func (g *Group) chainTo(dst []Middleware) []Middleware {
+	if g == nil {
+		return dst
+	}
+	dst = g.parent.chainTo(dst)
+	return append(dst, g.own...)
 }
 
 // Group returns a nested group.
+//
+// The child records its parent rather than copying its middleware, so
+// middleware added to any enclosing group afterwards still reaches this child's
+// routes.
 func (g *Group) Group(prefix string, mw ...Middleware) *Group {
-	child := &Group{
+	return &Group{
 		b:      g.b,
+		parent: g,
 		prefix: joinPrefix(g.prefix, prefix),
 		hosts:  g.hosts,
+		own:    append([]Middleware(nil), mw...),
 	}
-	child.mw = make([]Middleware, 0, len(g.mw)+len(mw))
-	child.mw = append(child.mw, g.mw...)
-	child.mw = append(child.mw, mw...)
-	return child
 }
 
-// Use appends middleware to this group only.
-func (g *Group) Use(mw ...Middleware) { g.mw = append(g.mw, mw...) }
+// Use appends middleware to this group and everything nested inside it.
+//
+// Like Router.Use, it applies to every route in its scope whatever the order:
+// routes registered before the call are covered as well as routes registered
+// after, and so are child groups created before it. Middleware is resolved when
+// the table is compiled, not when a route is registered.
+//
+//	api := r.Group("/api")
+//	v1 := api.Group("/v1")
+//	v1.GET("/orders", listOrders)
+//	api.Use(auth)               // covers /api/v1/orders too
+//
+// To scope middleware to some routes and not others, nest a group or attach it
+// to the route with WithMiddleware. Where the call sits among the registrations
+// does not change what it covers.
+func (g *Group) Use(mw ...Middleware) {
+	g.own = append(g.own, mw...)
+	if g.b != nil && g.b.invalidate != nil {
+		// The compiled table holds handler chains built from this middleware,
+		// so it has to be rebuilt before the next request is served.
+		g.b.invalidate()
+	}
+}
 
 // Host returns a group whose routes only answer on the given host patterns.
 //
@@ -175,10 +215,12 @@ func (g *Group) Use(mw ...Middleware) { g.mw = append(g.mw, mw...) }
 //
 // See ParseHostPattern for the accepted forms.
 func (g *Group) Host(patterns ...string) *Group {
-	child := &Group{b: g.b, prefix: g.prefix}
-	child.mw = append(child.mw, g.mw...)
-	child.hosts = append(child.hosts, patterns...)
-	return child
+	return &Group{
+		b:      g.b,
+		parent: g,
+		prefix: g.prefix,
+		hosts:  append([]string(nil), patterns...),
+	}
 }
 
 // Hosts returns the host patterns the group restricts its routes to.
@@ -309,9 +351,11 @@ func (g *Group) handle(method, pattern string, h http.Handler, opts ...RouteOpti
 		// parameter, so that ParamAt indexes line up with Route.Params.
 		rt.params = append([]ParamInfo{{Name: hostParam, Position: -1, InHost: true}}, params...)
 	}
-	// Group middleware wraps whatever the route options left, so route
-	// middleware ends up inside group middleware.
-	rt.handler = chain(rt.handler, g.mw)
+	// The group's middleware is not applied here: it is resolved at compile
+	// time, so that Use on this group or any enclosing one reaches this route
+	// whenever it is called. The route keeps a reference to the group it was
+	// registered on, which is what compile walks.
+	rt.group = g
 
 	if rt.name != "" {
 		if _, dup := g.b.names[rt.name]; dup {
@@ -461,10 +505,19 @@ func chain(h http.Handler, mw []Middleware) http.Handler {
 func (b *Builder) compile() *table {
 	hasHosts := false
 	hasPriority := false
+	// buf is reused across routes to assemble each handler's middleware, so
+	// compiling a large table does not allocate one slice per route.
+	var buf []Middleware
 	for _, e := range b.entries {
 		e.eachVariant(func(v *hostVariant) {
 			for m, rt := range v.byMethod {
-				v.served[m] = chain(rt.handler, b.mw)
+				// Outermost first: router middleware, then each enclosing group
+				// from the outside in, then the group's own. The route's own
+				// middleware was already applied by WithMiddleware, so it ends
+				// up inside all of them.
+				buf = append(buf[:0], b.mw...)
+				buf = rt.group.chainTo(buf)
+				v.served[m] = chain(rt.handler, buf)
 			}
 		})
 		if e.hasHosts {
