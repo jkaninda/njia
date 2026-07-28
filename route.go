@@ -68,6 +68,10 @@ type Route struct {
 	meta map[string]any
 	// params describes the pattern's parameters in order.
 	params []ParamInfo
+	// group is the group the route was registered on, or nil. Its middleware is
+	// resolved when the table is compiled rather than copied in here, so that
+	// Use on it or on any enclosing group applies whatever the order.
+	group *Group
 	// segs is the compiled pattern.
 	segs []tree.Segment
 	// seq is the registration order, used to break specificity ties.
