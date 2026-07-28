@@ -25,8 +25,24 @@ regular expressions.
 	api.GET("/orders/{id}", http.HandlerFunc(getOrder))
 
 Registration returns an error instead of panicking, and Swap replaces the whole
-route table atomically after validating it, so a process that builds routes
-from user-supplied configuration can reload without ever going down.
+route table atomically after validating it, so a process that builds routes from
+user-supplied configuration can reload without ever going down.
+
+# Proxies and gateways
+
+Two features exist for reverse proxies, which route on behalf of backends
+rather than serving their own handlers.
+
+ANY registers one handler for every HTTP method, including verbs no RFC names,
+so a proxy can forward whatever the client sent instead of rejecting anything
+not enumerated at registration time:
+
+	r.ANY("/api/{rest...}", proxy)
+
+WithPriority orders a route against the others that match the same path, ahead
+of specificity, so a catch-all can deliberately shadow a more specific route:
+
+	r.ANY("/api/{rest...}", maintenance, njia.WithPriority(-1))
 
 Package github.com/jkaninda/njia/muxcompat is a separate, drop-in replacement
 for github.com/gorilla/mux, for projects migrating away from it.
@@ -152,6 +168,12 @@ func (r *Router) OPTIONS(pattern string, h http.Handler, opts ...RouteOption) er
 	return r.Handle(http.MethodOptions, pattern, h, opts...)
 }
 
+// ANY registers a handler for every HTTP method, which is what a reverse proxy
+// forwarding arbitrary verbs needs. See MethodAny.
+func (r *Router) ANY(pattern string, h http.Handler, opts ...RouteOption) error {
+	return r.Handle(MethodAny, pattern, h, opts...)
+}
+
 // Group returns a group that prefixes its patterns and wraps its handlers.
 func (r *Router) Group(prefix string, mw ...Middleware) *Group {
 	r.mu.Lock()
@@ -194,8 +216,6 @@ func (r *Router) Swap(build func(*Builder) error) error {
 	r.tbl.Store(t)
 	return nil
 }
-
-// --- introspection ---------------------------------------------------------
 
 // Routes returns a snapshot of every registered route, in registration order.
 // It is everything a documentation generator needs: the template as written,

@@ -34,6 +34,11 @@ type table struct {
 	// hasHosts reports that at least one route constrains the host. When it is
 	// false the request's host is never even looked at.
 	hasHosts bool
+	// hasPriority reports that at least one pattern carries a non-default
+	// priority. It gates the fast paths in find: those return the most specific
+	// match without consulting any other candidate, which is only the right
+	// answer when specificity is what decides.
+	hasPriority bool
 }
 
 // pathEntry groups every route registered under one compiled path pattern.
@@ -47,6 +52,10 @@ type pathEntry struct {
 	segs    []tree.Segment
 	score   uint64
 	minSeq  int
+	// priority orders this pattern against the others that match a path, ahead
+	// of score. It is the lowest priority any route filed under the pattern
+	// asked for, since ordering happens before a method is chosen.
+	priority int
 	// nparams is how many parameters the path pattern declares.
 	nparams int
 
@@ -83,7 +92,11 @@ type hostVariant struct {
 }
 
 // route returns the route for the method, falling back from HEAD to GET the
-// way net/http itself does.
+// way net/http itself does, and from anything to a MethodAny registration.
+//
+// The order is what makes a wildcard usable alongside named methods: an
+// explicit registration is always preferred, and the wildcard only catches what
+// nothing else claimed.
 func (v *hostVariant) route(method string) (*Route, http.Handler) {
 	if rt := v.byMethod[method]; rt != nil {
 		return rt, v.served[method]
@@ -92,6 +105,9 @@ func (v *hostVariant) route(method string) (*Route, http.Handler) {
 		if rt := v.byMethod[http.MethodGet]; rt != nil {
 			return rt, v.served[http.MethodGet]
 		}
+	}
+	if rt := v.byMethod[MethodAny]; rt != nil {
+		return rt, v.served[MethodAny]
 	}
 	return nil, nil
 }
@@ -307,25 +323,36 @@ func (t *table) find(path, host, port, method string, cands []*pathEntry, params
 	// returns, so no two uses of it are ever live at once.
 	var pbuf [8]tree.Param
 
-	// Fast path. A fully static pattern is the most specific thing that can
-	// match a path, so an exact hit that also serves the host and method is
-	// final.
-	if e := t.static[path]; e != nil {
-		if rt, h, out, _ := e.resolve(host, port, method, params); rt != nil {
-			return rt, h, out, true
+	// Both fast paths below answer with the most specific pattern that matches,
+	// without looking at any other candidate. That is only the right answer when
+	// specificity is what decides the winner, so a table carrying priorities
+	// skips them and takes the ordered slow path instead.
+	if !t.hasPriority {
+		// Fast path. A fully static pattern is the most specific thing that can
+		// match a path, so an exact hit that also serves the host and method is
+		// final.
+		if e := t.static[path]; e != nil {
+			if rt, h, out, _ := e.resolve(host, port, method, params); rt != nil {
+				return rt, h, out, true
+			}
+			cands = append(cands, e)
+		} else if t.tree.Len() > 0 {
+			// Otherwise the tree's own depth-first walk already returns the most
+			// specific match with its parameters captured, so neither a candidate
+			// sort nor a second pass over the pattern is needed.
+			e, tp, ok := t.tree.Lookup(path, pbuf[:0])
+			if !ok {
+				return nil, nil, params, false
+			}
+			if rt, h, out, _ := e.resolve(host, port, method, params); rt != nil {
+				return rt, h, appendParams(out, tp), true
+			}
 		}
+	} else if e := t.static[path]; e != nil {
+		// The tree does not hold static patterns, so a static hit has to be
+		// seeded into the candidate set by hand before it can be ordered
+		// against the tree's matches.
 		cands = append(cands, e)
-	} else if t.tree.Len() > 0 {
-		// Otherwise the tree's own depth-first walk already returns the most
-		// specific match with its parameters captured, so neither a candidate
-		// sort nor a second pass over the pattern is needed.
-		e, tp, ok := t.tree.Lookup(path, pbuf[:0])
-		if !ok {
-			return nil, nil, params, false
-		}
-		if rt, h, out, _ := e.resolve(host, port, method, params); rt != nil {
-			return rt, h, appendParams(out, tp), true
-		}
 	}
 
 	// Slow path: the most specific match does not serve this host and method,
@@ -391,6 +418,9 @@ func (t *table) allowed(path, host, port string) []string {
 				}
 			}
 			for m := range v.byMethod {
+				if m == MethodAny {
+					continue
+				}
 				if !slices.Contains(out, m) {
 					out = append(out, m)
 				}
@@ -404,16 +434,16 @@ func (t *table) allowed(path, host, port string) []string {
 	return out
 }
 
-// sortCandidates orders candidates by specificity, then by registration order.
-// Insertion sort keeps the common case allocation free; candidate sets are
-// tiny because they are all the patterns that matched one concrete path.
+// sortCandidates orders candidates by priority, then specificity, then
+// registration order. Insertion sort keeps the common case allocation free;
+// candidate sets are tiny because they are all the patterns that matched one
+// concrete path.
 func sortCandidates(a []*pathEntry) {
 	for i := 1; i < len(a); i++ {
 		v := a[i]
 		j := i - 1
 		for j >= 0 {
-			c := a[j]
-			if c.score > v.score || (c.score == v.score && c.minSeq <= v.minSeq) {
+			if !candidateLess(v, a[j]) {
 				break
 			}
 			a[j+1] = a[j]
@@ -421,6 +451,20 @@ func sortCandidates(a []*pathEntry) {
 		}
 		a[j+1] = v
 	}
+}
+
+// candidateLess reports whether x should be consulted before y. Priority comes
+// first so that a route can be pulled ahead of a more specific one; within a
+// priority the most specific pattern wins, and an exact tie falls back to
+// registration order.
+func candidateLess(x, y *pathEntry) bool {
+	if x.priority != y.priority {
+		return x.priority < y.priority
+	}
+	if x.score != y.score {
+		return x.score > y.score
+	}
+	return x.minSeq < y.minSeq
 }
 
 // authority returns the host and port a request should be matched against, or

@@ -130,6 +130,11 @@ func (b *Builder) OPTIONS(pattern string, h http.Handler, opts ...RouteOption) e
 	return b.Handle(http.MethodOptions, pattern, h, opts...)
 }
 
+// ANY registers a handler for every HTTP method. See MethodAny.
+func (b *Builder) ANY(pattern string, h http.Handler, opts ...RouteOption) error {
+	return b.Handle(MethodAny, pattern, h, opts...)
+}
+
 // Group is a path prefix and a middleware chain that routes are registered
 // against.
 //
@@ -222,6 +227,11 @@ func (g *Group) HEAD(pattern string, h http.Handler, opts ...RouteOption) error 
 // OPTIONS registers a handler for OPTIONS requests.
 func (g *Group) OPTIONS(pattern string, h http.Handler, opts ...RouteOption) error {
 	return g.Handle(http.MethodOptions, pattern, h, opts...)
+}
+
+// ANY registers a handler for every HTTP method. See MethodAny.
+func (g *Group) ANY(pattern string, h http.Handler, opts ...RouteOption) error {
+	return g.Handle(MethodAny, pattern, h, opts...)
 }
 
 // HandleFunc registers a handler function for a method and pattern.
@@ -343,11 +353,12 @@ func (g *Group) handle(method, pattern string, h http.Handler, opts ...RouteOpti
 
 	if entry == nil {
 		entry = &pathEntry{
-			pattern: full,
-			segs:    segs,
-			score:   specificity(segs),
-			minSeq:  rt.seq,
-			nparams: len(params),
+			pattern:  full,
+			segs:     segs,
+			score:    specificity(segs),
+			minSeq:   rt.seq,
+			priority: rt.priority,
+			nparams:  len(params),
 		}
 		if len(params) == 0 {
 			g.b.static[full] = entry
@@ -356,6 +367,10 @@ func (g *Group) handle(method, pattern string, h http.Handler, opts ...RouteOpti
 		}
 		g.b.byKey[key] = entry
 		g.b.entries = append(g.b.entries, entry)
+	} else if rt.priority < entry.priority {
+		// Ordering picks a pattern before it picks a method, so every route
+		// filed under a pattern shares one priority: the most urgent asked for.
+		entry.priority = rt.priority
 	}
 	for _, hp := range hostPats {
 		entry.variantFor(hp, rt.seq).byMethod[method] = rt
@@ -445,6 +460,7 @@ func chain(h http.Handler, mw []Middleware) http.Handler {
 // compile freezes the builder into a table, applying router-level middleware.
 func (b *Builder) compile() *table {
 	hasHosts := false
+	hasPriority := false
 	for _, e := range b.entries {
 		e.eachVariant(func(v *hostVariant) {
 			for m, rt := range v.byMethod {
@@ -454,12 +470,16 @@ func (b *Builder) compile() *table {
 		if e.hasHosts {
 			hasHosts = true
 		}
+		if e.priority != DefaultPriority {
+			hasPriority = true
+		}
 	}
 	return &table{
-		static:   b.static,
-		tree:     b.tree,
-		routes:   b.routes,
-		names:    b.names,
-		hasHosts: hasHosts,
+		static:      b.static,
+		tree:        b.tree,
+		routes:      b.routes,
+		names:       b.names,
+		hasHosts:    hasHosts,
+		hasPriority: hasPriority,
 	}
 }

@@ -18,7 +18,8 @@ import (
 )
 
 // Errors reported by route registration. Every registration failure is one of
-// these, wrapped with context; nothing in this package panics.
+// these, wrapped in a *RouteError naming the route it came from; nothing in
+// this package panics.
 var (
 	// ErrBadPattern reports a template that could not be parsed, such as one
 	// with unbalanced braces or an empty variable name.
