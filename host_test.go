@@ -559,9 +559,35 @@ func TestHostFromAbsoluteRequestURI(t *testing.T) {
 	r := njia.New()
 	mustRegister(t, r.Host("api.example.com").GET("/x", echo("hit")))
 
-	// A proxy-style absolute request URI carries the authority in the URL.
 	req := httptest.NewRequest("GET", "http://api.example.com/x", nil)
-	req.Host = "something.else"
+	rec := httptest.NewRecorder()
+	r.ServeHTTP(rec, req)
+	if rec.Code != 200 {
+		t.Fatalf("status = %d, want 200", rec.Code)
+	}
+}
+
+func TestRewrittenHostBeatsRequestTarget(t *testing.T) {
+	r := njia.New()
+	mustRegister(t, r.Host("a.example.com").GET("/panel", echo("A")))
+	mustRegister(t, r.Host("b.example.com").GET("/panel", echo("B")))
+
+	req := httptest.NewRequest("GET", "http://a.example.com/panel", nil)
+	req.Host = "b.example.com"
+	rec := httptest.NewRecorder()
+	r.ServeHTTP(rec, req)
+	if got := rec.Body.String(); got != "B" {
+		t.Fatalf("body = %q, want %q", got, "B")
+	}
+}
+
+// A hand-built request with no Host falls back to the URL's authority.
+func TestHostFallsBackToURLWhenHostEmpty(t *testing.T) {
+	r := njia.New()
+	mustRegister(t, r.Host("api.example.com").GET("/x", echo("hit")))
+
+	req := httptest.NewRequest("GET", "http://api.example.com/x", nil)
+	req.Host = ""
 	rec := httptest.NewRecorder()
 	r.ServeHTTP(rec, req)
 	if rec.Code != 200 {

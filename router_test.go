@@ -117,8 +117,7 @@ func TestMethodNotAllowedReportsAllow(t *testing.T) {
 }
 
 func TestSpecificityBeatsRegistrationOrder(t *testing.T) {
-	// The wildcard is registered first; the static route must still win, which
-	// is where the native API deliberately differs from gorilla.
+
 	r := njia.New()
 	mustRegister(t, r.GET("/a/{x}", echo("wild")))
 	mustRegister(t, r.GET("/a/b", echo("static")))
@@ -773,5 +772,26 @@ func TestSlowPathAgreesWithFastPath(t *testing.T) {
 	}
 	if code := serve(t, r, "DELETE", "/api/v1").Code; code != http.StatusMethodNotAllowed {
 		t.Fatalf("DELETE /api/v1 status = %d, want 405", code)
+	}
+}
+
+// http.StripPrefix with a prefix ending in a slash hands the inner handler a
+// path with no leading slash. Such a path must not reach a route: matching it
+// would discard its first byte, sending "users/7" to "/sers/{id}".
+func TestSlashlessPathIsNotFound(t *testing.T) {
+	inner := njia.New()
+	mustRegister(t, inner.GET("/users/{id}", echo("users")))
+	mustRegister(t, inner.GET("/sers/{id}", echo("decoy")))
+	mustRegister(t, inner.GET("/files/{rest...}", echo("files")))
+	h := http.StripPrefix("/api/", inner)
+
+	for _, target := range []string{"/api/users/7", "/api/sers/7", "/api/Zfiles/x"} {
+		t.Run(target, func(t *testing.T) {
+			rec := httptest.NewRecorder()
+			h.ServeHTTP(rec, httptest.NewRequest("GET", target, nil))
+			if rec.Code != http.StatusNotFound {
+				t.Fatalf("status = %d (%q), want 404", rec.Code, rec.Body.String())
+			}
+		})
 	}
 }
