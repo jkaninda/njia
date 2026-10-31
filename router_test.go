@@ -893,3 +893,36 @@ func TestRedirectNeverProtocolRelative(t *testing.T) {
 		t.Fatalf("Location = %q is protocol-relative", loc)
 	}
 }
+
+// A zero Router is as usable as one from New, whichever method touches it
+// first. Each of these used to dereference a nil builder.
+func TestZeroRouterIsUsable(t *testing.T) {
+	first := map[string]func(r *njia.Router){
+		"ServeHTTP": func(r *njia.Router) { serve(t, r, http.MethodGet, "/") },
+		"Use":       func(r *njia.Router) { r.Use(func(h http.Handler) http.Handler { return h }) },
+		"Group":     func(r *njia.Router) { r.Group("/g") },
+		"Host":      func(r *njia.Router) { r.Host("example.com") },
+		"Err":       func(r *njia.Router) { _ = r.Err() },
+		"Errs":      func(r *njia.Router) { _ = r.Errs() },
+		"Routes":    func(r *njia.Router) { _ = r.Routes() },
+		"Route":     func(r *njia.Router) { _ = r.Route("x") },
+		"String":    func(r *njia.Router) { _ = r.String() },
+		"Lookup": func(r *njia.Router) {
+			_, _ = r.Lookup(httptest.NewRequest(http.MethodGet, "/", nil))
+		},
+		"Mount": func(r *njia.Router) { mustRegister(t, r.Mount("/m", echo("m"))) },
+		"Swap": func(r *njia.Router) {
+			mustRegister(t, r.Swap(func(b *njia.Builder) error { return nil }))
+		},
+	}
+	for name, call := range first {
+		t.Run(name, func(t *testing.T) {
+			var r njia.Router
+			call(&r)
+			mustRegister(t, r.GET("/a", echo("a")))
+			if got := serve(t, &r, http.MethodGet, "/a").Body.String(); got != "a" {
+				t.Fatalf("body = %q, want %q", got, "a")
+			}
+		})
+	}
+}

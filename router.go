@@ -89,7 +89,9 @@ import (
 	"sync/atomic"
 )
 
-// Router dispatches requests to registered handlers.
+// Router dispatches requests to registered handlers. The zero value is an
+// empty router ready to use, equivalent to one from New, and must not be copied
+// after first use.
 //
 // A router is safe for concurrent use once it is serving. Registering routes
 // while requests are in flight is not: use Swap, which validates a new table
@@ -131,7 +133,7 @@ type Router struct {
 	tbl atomic.Pointer[table]
 }
 
-// New returns an empty router.
+// New returns an empty router. It is equivalent to declaring a zero Router.
 func New() *Router {
 	r := &Router{}
 	r.adopt(newBuilder())
@@ -143,6 +145,15 @@ func New() *Router {
 func (r *Router) adopt(b *Builder) {
 	b.invalidate = func() { r.tbl.Store(nil) }
 	r.b = b
+}
+
+// builder returns the router's builder, creating it on first use so that a
+// zero Router is as usable as one from New. The caller holds r.mu.
+func (r *Router) builder() *Builder {
+	if r.b == nil {
+		r.adopt(newBuilder())
+	}
+	return r.b
 }
 
 //  registration
@@ -166,7 +177,7 @@ func (r *Router) Use(mw ...Middleware) {
 func (r *Router) Handle(method, pattern string, h http.Handler, opts ...RouteOption) error {
 	r.mu.Lock()
 	defer r.mu.Unlock()
-	err := r.b.Handle(method, pattern, h, opts...)
+	err := r.builder().Handle(method, pattern, h, opts...)
 	r.tbl.Store(nil)
 	return err
 }
@@ -232,21 +243,21 @@ func (r *Router) ANY(pattern string, h http.Handler, opts ...RouteOption) error 
 func (r *Router) Err() error {
 	r.mu.Lock()
 	defer r.mu.Unlock()
-	return r.b.Err()
+	return r.builder().Err()
 }
 
 // Errs returns every registration error recorded on the router.
 func (r *Router) Errs() []error {
 	r.mu.Lock()
 	defer r.mu.Unlock()
-	return r.b.Errs()
+	return r.builder().Errs()
 }
 
 // Group returns a group that prefixes its patterns and wraps its handlers.
 func (r *Router) Group(prefix string, mw ...Middleware) *Group {
 	r.mu.Lock()
 	defer r.mu.Unlock()
-	return r.b.Group(prefix, mw...)
+	return r.builder().Group(prefix, mw...)
 }
 
 // Host returns a group whose routes only answer on the given host patterns.
@@ -254,7 +265,7 @@ func (r *Router) Group(prefix string, mw ...Middleware) *Group {
 func (r *Router) Host(patterns ...string) *Group {
 	r.mu.Lock()
 	defer r.mu.Unlock()
-	return r.b.Host(patterns...)
+	return r.builder().Host(patterns...)
 }
 
 // Swap replaces the route table. build is called with a fresh, empty builder;
@@ -314,7 +325,7 @@ func (r *Router) table() *table {
 	if t := r.tbl.Load(); t != nil {
 		return t
 	}
-	t := r.b.compile(r.mw)
+	t := r.builder().compile(r.mw)
 	r.install(t)
 	return t
 }

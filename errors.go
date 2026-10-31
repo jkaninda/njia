@@ -15,6 +15,7 @@ package njia
 import (
 	"errors"
 	"fmt"
+	"strings"
 )
 
 // Errors reported by route registration. Every registration failure is one of
@@ -57,12 +58,19 @@ type RouteError struct {
 	Err error
 }
 
-// Error implements the error interface.
+// Error implements the error interface. The cause's own "njia: " prefix is
+// dropped, so the package is named once:
+//
+//	njia: route GET "/users/{id": malformed route pattern: ...
 func (e *RouteError) Error() string {
-	if e.Method == "" {
-		return fmt.Sprintf("njia: route %q: %v", e.Pattern, e.Err)
+	cause := "<nil>"
+	if e.Err != nil {
+		cause = strings.TrimPrefix(e.Err.Error(), "njia: ")
 	}
-	return fmt.Sprintf("njia: route %s %q: %v", e.Method, e.Pattern, e.Err)
+	if e.Method == "" {
+		return fmt.Sprintf("njia: route %q: %s", e.Pattern, cause)
+	}
+	return fmt.Sprintf("njia: route %s %q: %s", e.Method, e.Pattern, cause)
 }
 
 // Unwrap returns the underlying cause.

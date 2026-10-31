@@ -39,6 +39,7 @@ go get github.com/jkaninda/njia/muxcompat
 package main
 
 import (
+    "fmt"
     "log"
     "net/http"
 
@@ -48,30 +49,48 @@ import (
 func main() {
     r := njia.New()
 
-    r.GET("/healthz", healthHandler)
-    r.GET("/users/{id}", getUser)
-    r.GET("/files/{rest...}", serveFile)
+    r.GET("/healthz", http.HandlerFunc(health))
+    r.GET("/users/{id}", http.HandlerFunc(getUser))
+    r.GET("/files/{rest...}", http.HandlerFunc(serveFile))
 
-    api := r.Group(
-        "/api/v1",
-        authMiddleware,
-        rateLimitMiddleware,
-    )
+    api := r.Group("/api/v1", logRequests)
+    api.POST("/orders", http.HandlerFunc(createOrder))
 
-    api.POST("/orders", createOrder)
-
+    // Registration returns an error instead of panicking. Check every call,
+    // or check the whole table once before serving.
+    if err := r.Err(); err != nil {
+        log.Fatal(err)
+    }
     log.Fatal(http.ListenAndServe(":8080", r))
 }
-```
 
-Read a parameter without building a map:
+func health(w http.ResponseWriter, r *http.Request) {
+    fmt.Fprintln(w, "ok")
+}
 
-```go
 func getUser(w http.ResponseWriter, r *http.Request) {
-    id := njia.Param(r, "id")   // no map, no allocation
-    ...
+    id := njia.Param(r, "id") // no map, no allocation
+    fmt.Fprintf(w, "user %s\n", id)
+}
+
+func serveFile(w http.ResponseWriter, r *http.Request) {
+    fmt.Fprintf(w, "file %s\n", njia.Param(r, "rest"))
+}
+
+func createOrder(w http.ResponseWriter, r *http.Request) {
+    w.WriteHeader(http.StatusCreated)
+}
+
+func logRequests(next http.Handler) http.Handler {
+    return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+        log.Printf("%s %s", r.Method, r.URL.Path)
+        next.ServeHTTP(w, r)
+    })
 }
 ```
+
+Method shorthands such as `GET` take an `http.Handler`, so a plain function is
+wrapped with `http.HandlerFunc`; `HandleFunc` takes one directly.
 
 ## Routing
 
@@ -139,7 +158,7 @@ carries a name and nothing else.
 
 ```go
 err := r.GET("/users/{id:int}", getUser)
-// njia: route GET "/users/{id:int}": njia: malformed route pattern:
+// njia: route GET "/users/{id:int}": malformed route pattern:
 // "{id:int}" constrains "id", which this router does not support; write {id}
 ```
 
@@ -308,9 +327,8 @@ returns `ErrParamConflict`. A plain `{id}` parameter there is fine.
 
 ### Router configuration
 
-Every field is off by default. Set them on a router from `New()`, which is the
-only supported way to construct one — the zero `Router` has no route table and
-panics on registration.
+Every field is off by default. `njia.New()` and a zero `var r njia.Router` are
+equivalent; set the fields before serving.
 
 ```go
 r := njia.New()
@@ -409,7 +427,7 @@ Registration returns errors and never panics:
 
 ```go
 if err := r.GET("/users/{id", handler); err != nil {
-    // njia: route GET "/users/{id": njia: malformed route pattern: ...
+    // njia: route GET "/users/{id": malformed route pattern: ...
 }
 ```
 
