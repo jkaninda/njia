@@ -795,3 +795,32 @@ func TestSlashlessPathIsNotFound(t *testing.T) {
 		})
 	}
 }
+
+// A miss on a router without middleware costs nothing extra: the unmatched
+// chain is only built when there is middleware to run.
+func TestNotFoundWithoutMiddlewareDoesNotAllocate(t *testing.T) {
+	r := njia.New()
+	r.NotFound = http.HandlerFunc(func(http.ResponseWriter, *http.Request) {})
+	mustRegister(t, r.GET("/users/{id}", echo("u")))
+	req := httptest.NewRequest(http.MethodGet, "/nope/deep", nil)
+	w := httptest.NewRecorder()
+	if n := testing.AllocsPerRun(200, func() { r.ServeHTTP(w, req) }); n != 0 {
+		t.Fatalf("404 allocated %v times, want 0", n)
+	}
+}
+
+// With middleware, a miss allocates no more than the middleware itself does.
+func TestNotFoundThroughMiddlewareDoesNotAllocate(t *testing.T) {
+	r := njia.New()
+	r.Use(func(next http.Handler) http.Handler {
+		return http.HandlerFunc(func(w http.ResponseWriter, q *http.Request) { next.ServeHTTP(w, q) })
+	})
+	r.NotFound = http.HandlerFunc(func(http.ResponseWriter, *http.Request) {})
+	mustRegister(t, r.GET("/users/{id}", echo("u")))
+	req := httptest.NewRequest(http.MethodGet, "/nope/deep", nil)
+	w := httptest.NewRecorder()
+	r.ServeHTTP(w, req) // compiles the table
+	if n := testing.AllocsPerRun(200, func() { r.ServeHTTP(w, req) }); n != 0 {
+		t.Fatalf("404 allocated %v times, want 0", n)
+	}
+}

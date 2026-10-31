@@ -69,6 +69,11 @@ dependent on where a line sits.
 Applied outermost first: router middleware, then each enclosing group from the
 outside in, then the route's own, then the handler.
 
+Router middleware also wraps the requests no route serves — the 404, the 405 and
+the CleanPath and RedirectTrailingSlash redirects — so a CORS middleware can
+answer a preflight and an access log records misses. Group and route middleware
+only wraps matched routes.
+
 Package github.com/jkaninda/njia/muxcompat is a separate, drop-in replacement
 for github.com/gorilla/mux, for projects migrating away from it.
 */
@@ -91,6 +96,11 @@ import (
 type Router struct {
 	// NotFound serves requests that matched no route. When nil,
 	// http.NotFoundHandler is used.
+	//
+	// Router-level middleware wraps it, and MethodNotAllowed and the redirects
+	// below, just as it wraps a route: an access log or a CORS middleware sees
+	// every request. Group and route middleware does not, because a request
+	// that matched no route belongs to no group.
 	NotFound http.Handler
 
 	// MethodNotAllowed serves requests whose path matched a route but whose
@@ -270,7 +280,7 @@ func (r *Router) Swap(build func(*Builder) error) error {
 	r.mu.Lock()
 	defer r.mu.Unlock()
 	r.adopt(nb)
-	r.tbl.Store(nb.compile(r.mw))
+	r.install(nb.compile(r.mw))
 	return nil
 }
 
@@ -302,8 +312,19 @@ func (r *Router) table() *table {
 		return t
 	}
 	t := r.b.compile(r.mw)
-	r.tbl.Store(t)
+	r.install(t)
 	return t
+}
+
+// install makes t the live table, first building the middleware chain its
+// unmatched requests are answered through. The caller holds r.mu.
+func (r *Router) install(t *table) {
+	if len(t.mw) > 0 {
+		t.unmatched = chain(http.HandlerFunc(func(w http.ResponseWriter, req *http.Request) {
+			r.resolveUnmatched(w, req, t)
+		}), t.mw)
+	}
+	r.tbl.Store(t)
 }
 
 // Lookup returns the route that would serve req, without allocating and
@@ -335,6 +356,10 @@ func (r *Router) ServeHTTP(w http.ResponseWriter, req *http.Request) {
 
 	if r.CleanPath {
 		if cp := cleanPath(p); cp != p {
+			if t.unmatched != nil {
+				t.unmatched.ServeHTTP(w, req)
+				return
+			}
 			redirect(w, req, cp)
 			return
 		}
@@ -346,21 +371,15 @@ func (r *Router) ServeHTTP(w http.ResponseWriter, req *http.Request) {
 	var pbuf [8]PathParam
 	rt, h, params, pathMatched := t.find(p, host, port, req.Method, cbuf[:0], pbuf[:0])
 
-	if rt == nil && r.RedirectTrailingSlash {
-		if alt, ok := trailingSlashAlternative(p); ok {
-			if _, _, _, altMatched := t.find(alt, host, port, req.Method, cbuf[:0], pbuf[:0]); altMatched {
-				redirect(w, req, alt)
-				return
-			}
-		}
-	}
-
 	if rt == nil {
-		if pathMatched {
-			r.serveMethodNotAllowed(w, req, t, p, host, port)
+		if t.unmatched != nil {
+			// Router middleware sees a miss as well as a hit. Nothing found
+			// here can be carried through the chain without allocating, so the
+			// answer is worked out again at its far end.
+			t.unmatched.ServeHTTP(w, req)
 			return
 		}
-		r.serveNotFound(w, req)
+		r.answerUnmatched(w, req, t, p, host, port, pathMatched)
 		return
 	}
 
@@ -368,6 +387,47 @@ func (r *Router) ServeHTTP(w http.ResponseWriter, req *http.Request) {
 		req = withMatch(req, rt, params)
 	}
 	h.ServeHTTP(w, req)
+}
+
+// resolveUnmatched answers a request that no route serves, from inside the
+// router's middleware. It decides afresh, on the request as the middleware
+// passed it on, between a clean-path redirect, a trailing-slash redirect, a
+// 405 and a 404. A miss is never turned into a match here: routes are chosen
+// before middleware runs, and a route's chain already carries it.
+func (r *Router) resolveUnmatched(w http.ResponseWriter, req *http.Request, t *table) {
+	p := req.URL.Path
+	if r.CleanPath {
+		if cp := cleanPath(p); cp != p {
+			redirect(w, req, cp)
+			return
+		}
+	}
+	host, port := t.authority(req)
+	var cbuf [8]*pathEntry
+	var pbuf [8]PathParam
+	_, _, _, pathMatched := t.find(p, host, port, req.Method, cbuf[:0], pbuf[:0])
+	r.answerUnmatched(w, req, t, p, host, port, pathMatched)
+}
+
+// answerUnmatched sends the trailing-slash redirect, 405 or 404 for a request
+// no route serves. pathMatched reports that some route matched the path under
+// another method.
+func (r *Router) answerUnmatched(w http.ResponseWriter, req *http.Request, t *table, p, host, port string, pathMatched bool) {
+	if r.RedirectTrailingSlash {
+		if alt, ok := trailingSlashAlternative(p); ok {
+			var cbuf [8]*pathEntry
+			var pbuf [8]PathParam
+			if _, _, _, altMatched := t.find(alt, host, port, req.Method, cbuf[:0], pbuf[:0]); altMatched {
+				redirect(w, req, alt)
+				return
+			}
+		}
+	}
+	if pathMatched {
+		r.serveMethodNotAllowed(w, req, t, p, host, port)
+		return
+	}
+	r.serveNotFound(w, req)
 }
 
 func (r *Router) serveNotFound(w http.ResponseWriter, req *http.Request) {

@@ -253,6 +253,23 @@ secure.GET("/settings", settings)
 
 or attach it to a single route with `WithMiddleware`.
 
+#### Router middleware sees misses too
+
+`Router.Use` middleware also wraps the requests no route serves: the 404, the
+405, and the `CleanPath` and `RedirectTrailingSlash` redirects. A CORS
+middleware can therefore answer a preflight for a path that only registers
+`GET`, and an access log records scanners hitting paths that don't exist:
+
+```go
+r.Use(cors)
+r.GET("/api/orders", list)
+// OPTIONS /api/orders  -> answered by cors, not a bare 405
+```
+
+Group and route middleware wraps matched routes only, because a request that
+matched nothing belongs to no group. This differs from `gorilla/mux`, which
+ran no middleware on a miss; `muxcompat` keeps gorilla's behavior.
+
 ### Mounting a handler
 
 `Mount` hands every request at or below a prefix to one handler, for every
