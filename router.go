@@ -114,6 +114,7 @@ type Router struct {
 
 	mu  sync.Mutex
 	b   *Builder
+	mw  []Middleware
 	tbl atomic.Pointer[table]
 }
 
@@ -135,10 +136,14 @@ func (r *Router) adopt(b *Builder) {
 
 // Use appends router-level middleware. It applies to every route, including
 // routes registered before the call, outermost first in registration order.
+//
+// Router middleware belongs to the router, not to its route table, so it keeps
+// wrapping every route across Swap. Middleware meant for one table only is
+// added with Builder.Use inside the Swap callback, and runs inside this.
 func (r *Router) Use(mw ...Middleware) {
 	r.mu.Lock()
 	defer r.mu.Unlock()
-	r.b.mw = append(r.b.mw, mw...)
+	r.mw = append(r.mw, mw...)
 	r.tbl.Store(nil)
 }
 
@@ -247,6 +252,9 @@ func (r *Router) Host(patterns ...string) *Group {
 // This is the reload path: a route table assembled from user-supplied
 // configuration can be rejected in full without taking the process down.
 //
+// Middleware added with Router.Use wraps the new table as it wrapped the old
+// one; the builder starts with none of its own.
+//
 // A Group obtained from the router before a swap belongs to the replaced
 // builder and registering on it afterwards has no effect on the live table.
 // Build every group from the Builder the callback is given.
@@ -258,12 +266,11 @@ func (r *Router) Swap(build func(*Builder) error) error {
 	if err := nb.Err(); err != nil {
 		return err
 	}
-	t := nb.compile()
 
 	r.mu.Lock()
+	defer r.mu.Unlock()
 	r.adopt(nb)
-	r.mu.Unlock()
-	r.tbl.Store(t)
+	r.tbl.Store(nb.compile(r.mw))
 	return nil
 }
 
@@ -294,7 +301,7 @@ func (r *Router) table() *table {
 	if t := r.tbl.Load(); t != nil {
 		return t
 	}
-	t := r.b.compile()
+	t := r.b.compile(r.mw)
 	r.tbl.Store(t)
 	return t
 }

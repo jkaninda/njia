@@ -57,8 +57,9 @@ func newBuilder() *Builder {
 	}
 }
 
-// Use appends router-level middleware, applied outermost first to every route
-// in the table.
+// Use appends middleware to every route in the table, outermost first. It runs
+// inside any middleware the router itself carries from Router.Use, and unlike
+// that, it belongs to this table alone: a later Swap replaces it.
 func (b *Builder) Use(mw ...Middleware) { b.mw = append(b.mw, mw...) }
 
 // Err returns the first registration error recorded on the builder, so that a
@@ -501,21 +502,19 @@ func chain(h http.Handler, mw []Middleware) http.Handler {
 	return h
 }
 
-// compile freezes the builder into a table, applying router-level middleware.
-func (b *Builder) compile() *table {
+// compile freezes the builder into a table. outer is the owning router's
+// middleware, which wraps everything, including the builder's own.
+func (b *Builder) compile(outer []Middleware) *table {
 	hasHosts := false
 	hasPriority := false
-	// buf is reused across routes to assemble each handler's middleware, so
-	// compiling a large table does not allocate one slice per route.
+
 	var buf []Middleware
 	for _, e := range b.entries {
 		e.eachVariant(func(v *hostVariant) {
 			for m, rt := range v.byMethod {
-				// Outermost first: router middleware, then each enclosing group
-				// from the outside in, then the group's own. The route's own
-				// middleware was already applied by WithMiddleware, so it ends
-				// up inside all of them.
-				buf = append(buf[:0], b.mw...)
+
+				buf = append(buf[:0], outer...)
+				buf = append(buf, b.mw...)
 				buf = rt.group.chainTo(buf)
 				v.served[m] = chain(rt.handler, buf)
 			}

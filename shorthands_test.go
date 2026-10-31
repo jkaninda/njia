@@ -22,7 +22,9 @@
 package njia_test
 
 import (
+	"fmt"
 	"net/http"
+	"strings"
 	"testing"
 
 	"github.com/jkaninda/njia"
@@ -189,6 +191,47 @@ func TestBuilderUseWrapsEveryRoute(t *testing.T) {
 		if len(log) == 0 {
 			t.Errorf("%s: builder middleware did not run", path)
 		}
+	}
+}
+
+// Router.Use belongs to the router, so a reload must not strip it: a gateway's
+// global auth or access logging would otherwise silently vanish on the first
+// config change. Builder.Use belongs to one table and runs inside it.
+func TestRouterUseSurvivesSwap(t *testing.T) {
+	var log []string
+	r := njia.New()
+	r.Use(tracer("router", &log))
+	mustRegister(t, r.GET("/a", echo("a")))
+
+	for gen := 1; gen <= 2; gen++ {
+		tag := fmt.Sprintf("table%d", gen)
+		if err := r.Swap(func(b *njia.Builder) error {
+			b.Use(tracer(tag, &log))
+			return b.GET("/a", echo("a"))
+		}); err != nil {
+			t.Fatalf("swap %d: %v", gen, err)
+		}
+
+		log = nil
+		assertBody(t, r, http.MethodGet, "/a", "a")
+		if got, want := strings.Join(log, ","), "router,"+tag; got != want {
+			t.Errorf("after swap %d: middleware ran as %q, want %q", gen, got, want)
+		}
+	}
+}
+
+// Router.Use called after a Swap covers the swapped-in table too.
+func TestRouterUseAfterSwap(t *testing.T) {
+	var log []string
+	r := njia.New()
+	if err := r.Swap(func(b *njia.Builder) error { return b.GET("/a", echo("a")) }); err != nil {
+		t.Fatalf("swap: %v", err)
+	}
+	r.Use(tracer("router", &log))
+
+	assertBody(t, r, http.MethodGet, "/a", "a")
+	if len(log) != 1 {
+		t.Fatalf("router middleware ran %d times, want 1", len(log))
 	}
 }
 

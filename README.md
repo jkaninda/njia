@@ -494,6 +494,20 @@ running table is untouched. On success it is installed with a single atomic
 pointer store; in-flight requests finish against the old table and there is no
 lock anywhere on the request path.
 
+Middleware added with `Router.Use` belongs to the router and wraps every table a
+`Swap` installs, so a reload never strips global logging or auth. Middleware for
+one table only goes on the builder, runs inside the router's, and is replaced by
+the next `Swap`:
+
+```go
+r.Use(accessLog, recoverer)             // survives every reload
+
+err := r.Swap(func(b *njia.Builder) error {
+    b.Use(rateLimitFrom(cfg))           // this table only
+    ...
+})
+```
+
 ### Builder
 
 A `Builder` can also be built and inspected on its own, which lets a gateway
