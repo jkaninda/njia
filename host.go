@@ -159,8 +159,6 @@ func parseHostPattern(raw string) (*hostPattern, error) {
 		p.literal = lower(body)
 	}
 
-	// Specificity: kind first, then a port-qualified pattern over a bare one,
-	// then the longer fixed part.
 	fixed := len(p.literal) + len(p.suffix)
 	if fixed > 0xFFFF {
 		fixed = 0xFFFF
@@ -210,8 +208,7 @@ func splitPatternPort(raw string) (host, port string, err error) {
 		return raw, "", nil
 	}
 	if strings.IndexByte(raw, ':') != i {
-		// More than one colon and no brackets: an unbracketed IPv6 literal,
-		// which is not a legal Host header value.
+
 		return "", "", fmt.Errorf("%w: %q has several colons; bracket an IPv6 address", ErrBadHost, raw)
 	}
 	if i == len(raw)-1 {
@@ -293,11 +290,10 @@ func trimHostSuffix(host, suffix string) (string, bool) {
 // a slice of the request's own string.
 func requestAuthority(req *http.Request) (host, port string) {
 	authority := req.Host
-	if req.URL != nil && req.URL.Host != "" {
+	if authority == "" && req.URL != nil {
 		authority = req.URL.Host
 	}
 	host, port = splitAuthority(authority)
-	// "example.com." and "example.com" are the same name.
 	if len(host) > 1 && host[len(host)-1] == '.' {
 		host = host[:len(host)-1]
 	}
@@ -318,8 +314,7 @@ func splitAuthority(authority string) (host, port string) {
 	}
 	i := strings.LastIndexByte(authority, ':')
 	if i < 0 || strings.IndexByte(authority, ':') != i {
-		// No colon, or several without brackets: treat the whole thing as the
-		// name rather than guessing.
+
 		return authority, ""
 	}
 	return authority[:i], authority[i+1:]
@@ -434,8 +429,7 @@ func (r *Route) compileHosts() (string, error) {
 		pats = append(pats, p)
 	}
 	if param != "" {
-		// If one pattern captured and another did not, the parameter would be
-		// present for some requests and absent for others.
+
 		for _, p := range pats {
 			if p.name == "" {
 				return "", fmt.Errorf("%w: host pattern %q captures nothing while %q captures %q",

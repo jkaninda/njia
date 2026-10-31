@@ -198,6 +198,10 @@ func follow[T any](edges *[]edge[T], s Segment, pos int) (*node[T], error) {
 // walk backtracks, so a static segment that leads to a dead end does not
 // prevent a wildcard from matching.
 func (t *Tree[T]) Lookup(path string, params []Param) (T, []Param, bool) {
+	if path != "" && path[0] != '/' {
+		var zero T
+		return zero, params, false
+	}
 	return t.root.lookup(path, params)
 }
 
@@ -258,6 +262,10 @@ func (n *node[T]) lookup(path string, params []Param) (T, []Param, bool) {
 // returns the extended slice. Callers that supply a dst with spare capacity
 // avoid all allocation.
 func (t *Tree[T]) Collect(path string, dst []T) []T {
+	// See Lookup: a path must begin at a separator to match anything.
+	if path != "" && path[0] != '/' {
+		return dst
+	}
 	return t.root.collect(path, dst)
 }
 

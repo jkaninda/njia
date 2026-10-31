@@ -128,6 +128,25 @@ func TestLookupMisses(t *testing.T) {
 	}
 }
 
+// A path that does not begin with a separator matches nothing. Without the
+// check its first byte would be consumed as if it were the separator, so
+// "admin/1" would match "/dmin/:x" — a path missing its leading slash is what
+// http.StripPrefix hands an inner handler when the prefix ends in one.
+func TestSlashlessPathMatchesNothing(t *testing.T) {
+	tr := build(t, "/dmin/:x", "/:a/:b", "/*rest")
+	for _, path := range []string{"admin/1", "x", "Zadmin/panel", "%2Fdmin/1"} {
+		t.Run(path, func(t *testing.T) {
+			var buf [8]Param
+			if v, _, ok := tr.Lookup(path, buf[:0]); ok {
+				t.Fatalf("Lookup matched %q", v)
+			}
+			if got := tr.Collect(path, nil); len(got) != 0 {
+				t.Fatalf("Collect matched %v", got)
+			}
+		})
+	}
+}
+
 func TestCollectReportsEveryMatch(t *testing.T) {
 	tr := build(t, "/x/:a", "/x/#a", "/x/y", "/x/*rest")
 
