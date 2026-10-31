@@ -82,6 +82,7 @@ package njia
 import (
 	"fmt"
 	"net/http"
+	"net/url"
 	"path"
 	"strings"
 	"sync"
@@ -109,11 +110,13 @@ type Router struct {
 	MethodNotAllowed http.Handler
 
 	// CleanPath makes the router redirect a request whose path is not in
-	// canonical form to the cleaned form, with 301.
+	// canonical form to the cleaned form: 301 for GET and HEAD, 308 for every
+	// other method so that the method and body survive the redirect.
 	CleanPath bool
 
 	// RedirectTrailingSlash makes the router redirect "/x/" to "/x", and
-	// "/x" to "/x/", when only the other form is registered.
+	// "/x" to "/x/", when only the other form is registered, with the same
+	// status codes as CleanPath.
 	RedirectTrailingSlash bool
 
 	// RouteInContext makes the router attach the matched route to the request
@@ -449,11 +452,27 @@ func (r *Router) serveMethodNotAllowed(w http.ResponseWriter, req *http.Request,
 	http.Error(w, http.StatusText(http.StatusMethodNotAllowed), http.StatusMethodNotAllowed)
 }
 
-// redirect sends a 301 to the same URL with a different path.
+// redirect sends a permanent redirect to the same path-and-query with a
+// different path.
+//
+// GET and HEAD get 301. Every other method gets 308, because clients replay a
+// 301 as GET and drop the body, which would turn a POST to "/orders/" into a
+// GET of "/orders".
+//
+// The target is built from the path and query alone. Copying the request URL
+// would carry over the scheme and host of an absolute-form request target and
+// send the client to another origin, and a path starting with "//" would be
+// read as a protocol-relative URL, so leading slashes are collapsed to one.
 func redirect(w http.ResponseWriter, req *http.Request, to string) {
-	u := *req.URL
-	u.Path = to
-	http.Redirect(w, req, u.String(), http.StatusMovedPermanently)
+	for len(to) > 1 && to[1] == '/' {
+		to = to[1:]
+	}
+	u := url.URL{Path: to, RawQuery: req.URL.RawQuery}
+	code := http.StatusMovedPermanently
+	if req.Method != http.MethodGet && req.Method != http.MethodHead {
+		code = http.StatusPermanentRedirect
+	}
+	http.Redirect(w, req, u.String(), code)
 }
 
 // trailingSlashAlternative returns the other trailing-slash form of p.

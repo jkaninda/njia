@@ -824,3 +824,72 @@ func TestNotFoundThroughMiddlewareDoesNotAllocate(t *testing.T) {
 		t.Fatalf("404 allocated %v times, want 0", n)
 	}
 }
+
+// A redirect must not change the method: clients replay a 301 as GET and drop
+// the body, so everything but GET and HEAD gets 308.
+func TestRedirectStatusPreservesMethod(t *testing.T) {
+	r := njia.New()
+	r.CleanPath = true
+	r.RedirectTrailingSlash = true
+	mustRegister(t, r.ANY("/orders", echo("orders")))
+
+	tests := []struct {
+		name, method, target string
+		want                 int
+	}{
+		{"GET trailing slash is 301", http.MethodGet, "/orders/", http.StatusMovedPermanently},
+		{"HEAD trailing slash is 301", http.MethodHead, "/orders/", http.StatusMovedPermanently},
+		{"POST trailing slash is 308", http.MethodPost, "/orders/", http.StatusPermanentRedirect},
+		{"PUT clean path is 308", http.MethodPut, "//orders", http.StatusPermanentRedirect},
+		{"custom verb clean path is 308", "PROPFIND", "/x/../orders", http.StatusPermanentRedirect},
+	}
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			rec := serve(t, r, tc.method, tc.target)
+			if rec.Code != tc.want || rec.Header().Get("Location") != "/orders" {
+				t.Fatalf("got %d Location=%q, want %d to /orders", rec.Code, rec.Header().Get("Location"), tc.want)
+			}
+		})
+	}
+}
+
+// The Location is a path and query on the same origin. An absolute-form
+// request target must not lend it a scheme and host, and the query survives.
+func TestRedirectStaysOnOrigin(t *testing.T) {
+	r := njia.New()
+	r.CleanPath = true
+	r.RedirectTrailingSlash = true
+	mustRegister(t, r.GET("/x/y", echo("xy")))
+
+	tests := []struct {
+		name, target, want string
+	}{
+		{"absolute-form clean path", "http://attacker.example/x//y?q=1", "/x/y?q=1"},
+		{"absolute-form trailing slash", "http://attacker.example/x/y/", "/x/y"},
+		{"query survives", "/x/y/?a=1&b=2", "/x/y?a=1&b=2"},
+	}
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			rec := serve(t, r, http.MethodGet, tc.target)
+			if got := rec.Header().Get("Location"); got != tc.want {
+				t.Fatalf("Location = %q, want %q", got, tc.want)
+			}
+		})
+	}
+}
+
+// A path that begins with "//" would be read by a browser as a
+// protocol-relative URL naming another host, so no redirect may start with one.
+func TestRedirectNeverProtocolRelative(t *testing.T) {
+	r := njia.New()
+	r.RedirectTrailingSlash = true
+	mustRegister(t, r.GET("//evil.example", echo("odd")))
+
+	req := httptest.NewRequest(http.MethodGet, "/", nil)
+	req.URL.Path = "//evil.example/"
+	rec := httptest.NewRecorder()
+	r.ServeHTTP(rec, req)
+	if loc := rec.Header().Get("Location"); strings.HasPrefix(loc, "//") {
+		t.Fatalf("Location = %q is protocol-relative", loc)
+	}
+}
