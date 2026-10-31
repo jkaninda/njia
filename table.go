@@ -39,6 +39,13 @@ type table struct {
 	// match without consulting any other candidate, which is only the right
 	// answer when specificity is what decides.
 	hasPriority bool
+	// mw is the table-wide middleware, router's then builder's, outermost
+	// first. It wraps every route's chain, and unmatched as well.
+	mw []Middleware
+	// unmatched answers a request no route serves — a redirect, a 405 or a
+	// 404 — through mw, so that logging, CORS and security headers see misses
+	// too. It is nil when mw is empty, and the router answers directly.
+	unmatched http.Handler
 }
 
 // pathEntry groups every route registered under one compiled path pattern.

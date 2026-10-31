@@ -526,6 +526,10 @@ func (b *Builder) compile(outer []Middleware) *table {
 			hasPriority = true
 		}
 	}
+	var mw []Middleware
+	if len(outer)+len(b.mw) > 0 {
+		mw = append(append(make([]Middleware, 0, len(outer)+len(b.mw)), outer...), b.mw...)
+	}
 	return &table{
 		static:      b.static,
 		tree:        b.tree,
@@ -533,5 +537,6 @@ func (b *Builder) compile(outer []Middleware) *table {
 		names:       b.names,
 		hasHosts:    hasHosts,
 		hasPriority: hasPriority,
+		mw:          mw,
 	}
 }
