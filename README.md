@@ -325,8 +325,13 @@ r.RouteInContext = true
 |---|---|
 | `NotFound` | Serves unmatched requests. Default: `http.NotFoundHandler`. |
 | `MethodNotAllowed` | Serves a path hit with the wrong method. Default: 405 plus an `Allow` header. |
-| `CleanPath` | Redirects a non-canonical path to its cleaned form with 301 — `/a//b` → `/a/b`. |
+| `CleanPath` | Redirects a non-canonical path to its cleaned form — `/a//b` → `/a/b`. |
 | `RedirectTrailingSlash` | Redirects `/x/` to `/x`, or `/x` to `/x/`, when only the other is registered. Without it, the other form is a 404. |
+
+Both redirects answer `GET` and `HEAD` with 301 and every other method with 308,
+so a `POST` keeps its method and body instead of being replayed as a `GET`. The
+`Location` is the cleaned path plus the original query string, never a full URL,
+so it always stays on the origin the client asked.
 | `RouteInContext` | Makes `RouteOf` work for static routes too, at one allocation per request. |
 
 `RouteInContext` exists because a static route otherwise attaches nothing to the
